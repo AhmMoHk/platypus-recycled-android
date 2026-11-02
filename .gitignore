@@ -1,0 +1,12 @@
+# Generated / derived from the user's own game copy — never committed
+gen/
+data/
+build/
+x/
+il/
+scenes/
+*.rar
+*.apk
+__pycache__/
+*.pyc
+tools/cil/ext_index.json
