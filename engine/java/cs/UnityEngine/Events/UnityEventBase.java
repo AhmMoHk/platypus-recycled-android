@@ -65,21 +65,42 @@ public abstract class UnityEventBase implements cs.UnityEngine.ISerializationCal
         }
     }
 
-    private static java.lang.reflect.Method find(Object target, String name, int nparams) {
+    /** C# parameter type a persistent call's mode passes (PersistentListenerMode: 2 object, 3 int, 4 float, 5 string, 6 bool) */
+    private static String modeType(int mode) {
+        switch (mode) { case 3: return "i4"; case 4: return "r4"; case 5: return "string"; case 6: return "bool"; default: return null; }
+    }
+
+    private static java.lang.reflect.Method find(Object target, String name, int nparams, int mode, Object arg) {
         for (Class<?> k = target.getClass(); k != null; k = k.getSuperclass()) {
             String jn = null;
+            String[] pts = null;
+            int best = Integer.MIN_VALUE;
             try {
                 java.lang.reflect.Field f = k.getDeclaredField("$mmeta");
+                String want = modeType(mode);
                 for (Object[] mm : (Object[][]) f.get(null)) {
-                    if (name.equals(mm[1]) && ((String[]) mm[4]).length == nparams && ((((Integer) mm[2]) & 1) == 0)) { jn = (String) mm[0]; break; }
+                    String[] p = (String[]) mm[4];
+                    if (!name.equals(mm[1]) || p.length != nparams || (((Integer) mm[2]) & 1) != 0) continue;
+                    // overloads with the same parameter count: prefer the one taking the call's argument type
+                    int score = 0;
+                    if (nparams == 1 && want != null) score = want.equals(p[0]) ? 2 : -2;
+                    else if (nparams == 1 && arg != null) {
+                        Class<?> pc = cs.System.Reflection.Meta.csClassPublic(p[0]);
+                        score = pc == null ? 0 : pc.isInstance(arg) ? 2 : -2;
+                    }
+                    if (score > best) { best = score; jn = (String) mm[0]; pts = p; }
                 }
             } catch (NoSuchFieldException ignored) {
             } catch (IllegalAccessException e) {
                 throw new RuntimeException(e);
             }
-            if (jn == null) jn = name;
+            if (jn != null) {
+                java.lang.reflect.Method m = cs.System.Reflection.Meta.findJavaPublic(k, jn, nparams, pts);
+                if (m != null) { m.setAccessible(true); return m; }
+            }
             for (java.lang.reflect.Method m : k.getDeclaredMethods()) {
-                if (m.getName().equals(jn) && m.getParameterTypes().length == nparams) {
+                if (m.getName().equals(name) && m.getParameterTypes().length == nparams && !m.isBridge()) {
+                    if (nparams == 1 && arg != null && !cs.rt.Rt.instOf(cs.System.Type.of(m.getParameterTypes()[0]), arg)) continue;
                     m.setAccessible(true);
                     return m;
                 }
@@ -95,7 +116,7 @@ public abstract class UnityEventBase implements cs.UnityEngine.ISerializationCal
             if (!cs.UnityEngine.UObject.op_Implicit$boolean_(c.target)) continue;
             Object[] a = c.mode == 1 ? new Object[0] : c.mode == 0 ? args : new Object[]{c.arg};
             if (c.resolved == null) {
-                c.resolved = find(c.target, c.method, a.length);
+                c.resolved = find(c.target, c.method, a.length, c.mode, a.length == 1 ? a[0] : null);
                 if (c.resolved == null) {
                     c.failed = true;
                     cs.UnityEngine.Debug.LogWarning("UnityEvent: method " + c.method + " not found on " + c.target.getClass().getName());

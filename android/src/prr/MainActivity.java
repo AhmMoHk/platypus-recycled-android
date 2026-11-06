@@ -166,6 +166,9 @@ public final class MainActivity extends Activity {
                         }
                     })
                     .setNegativeButton("Cancel", null)
+                    .setNeutralButton("Share log", new android.content.DialogInterface.OnClickListener() {
+                        public void onClick(android.content.DialogInterface d, int w) { Diag.share(MainActivity.this); }
+                    })
                     .setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
                         public void onDismiss(android.content.DialogInterface di) { immersive(); }
                     })
@@ -212,7 +215,10 @@ public final class MainActivity extends Activity {
             Diag.add("frame: " + e);
             cs.UnityEngine.Debug.logExceptionAnyThread(e);
         }
-        Diag.heartbeat = System.nanoTime();
+        long fe = System.nanoTime();
+        if (booted && fe - Diag.heartbeat > 2000000000L)
+            Diag.add("slow frame " + (fe - Diag.heartbeat) / 1000000L + " ms, scene " + cs.UnityEngine.SceneManagement.SceneManager.GetActiveScene().get_name());
+        Diag.heartbeat = fe;
         if (!loadReported && booted && System.nanoTime() - bootNanos > 25000000000L) {
             loadReported = true;
             String sc = cs.UnityEngine.SceneManagement.SceneManager.GetActiveScene().get_name();

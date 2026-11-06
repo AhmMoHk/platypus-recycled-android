@@ -47,7 +47,7 @@ PATCHES = [
      't2 = "";', 1),
     ('cs/global/ShipPanelScript.java',
      't21 = cs.global.LocalisationManager.Get("ShipMenu.FireToJoin", t20);',
-     't21 = "";', 1),
+     't21 = this.playerIndex == 0 ? cs.global.LocalisationManager.Get("ShipMenu.FireToJoin", t20) : "";', 1),
 ]
 
 

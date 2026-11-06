@@ -63,6 +63,7 @@ final class Diag {
                         StringBuilder sb = new StringBuilder("The game thread has not finished a frame for " + stall / 1000 + " s. It is at:\n");
                         StackTraceElement[] st = g.getStackTrace();
                         for (int i = 0; i < Math.min(18, st.length); i++) sb.append("  ").append(st[i]).append('\n');
+                        if (!stallShown) add(sb.toString());
                         sb.append("\nLast log:\n").append(text(14)).append("\n(tap to share the log)");
                         show(sb.toString());
                     } else if (stall < 2000) {

@@ -55,10 +55,10 @@ public class MethodInfo extends MethodBase {
                     boolean st = (fl & 1) != 0, pub = (fl & 2) != 0;
                     if (st && (bf & 8) == 0 || !st && (bf & 4) == 0 || pub && (bf & 16) == 0 || !pub && (bf & 32) == 0) continue;
                     if (c != t.cls && (st || (fl & 64) != 0)) continue;
-                    String sig = row[1] + "/" + ((String[]) row[4]).length;
+                    String sig = row[1] + "/" + java.util.Arrays.toString((String[]) row[4]);
                     if ((fl & 4) != 0 && !seen.add(sig)) continue;            // overridden in a subclass
                     String[] pts = (String[]) row[4];
-                    Method jm = Meta.findJava(c, (String) row[0], pts.length + (((fl & 2048) != 0) ? countGeneric(c, (String) row[0], pts.length) : 0));
+                    Method jm = Meta.findJava(c, (String) row[0], pts.length + (((fl & 2048) != 0) ? countGeneric(c, (String) row[0], pts.length) : 0), pts);
                     if (jm == null) continue;
                     out.add(new MethodInfo(cs.System.Type.of(c), jm, row));
                 }
@@ -68,7 +68,8 @@ public class MethodInfo extends MethodBase {
                     if (n.startsWith("$") || !Modifier.isPublic(m.getModifiers())) continue;
                     boolean st = Modifier.isStatic(m.getModifiers());
                     if (st && (bf & 8) == 0 || !st && (bf & 4) == 0 || (bf & 16) == 0) continue;
-                    if (!seen.add(n + "/" + m.getParameterTypes().length)) continue;
+                    if (m.isBridge() || m.isSynthetic()) continue;
+                    if (!seen.add(n + java.util.Arrays.toString(m.getParameterTypes()))) continue;   // full signature: overloads with equal counts
                     out.add(new MethodInfo(cs.System.Type.of(c), m));
                 }
             }
