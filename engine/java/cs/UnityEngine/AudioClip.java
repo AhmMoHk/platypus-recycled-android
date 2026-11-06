@@ -38,6 +38,7 @@ public class AudioClip extends UObject {
 
     /** start decoding in the background (Play): the mixer plays silence until the samples are there */
     public void $request() {
+        if ($streamed()) { if (loadState == 0) loadState = 2; return; }
         synchronized (this) {
             if ($pcm != null || loadState == 3 || loadState == 1) return;
             loadState = 1;
@@ -50,7 +51,15 @@ public class AudioClip extends UObject {
     public boolean get_preloadAudioData() { return preload; }
     public boolean get_loadInBackground() { return false; }
     public boolean get_ambisonic() { return false; }
-    public boolean LoadAudioData() { ensure(); return loadState == 2; }
+    /** long compressed clips (music) are streamed while playing instead of decoded into memory */
+    public boolean $streamed() { return $src != null && $pcm == null && frequency > 0 && samples > frequency * 8; }
+
+    /** Unity starts the load and returns at once: streamed clips are ready, short ones decode in the background */
+    public boolean LoadAudioData() {
+        if ($streamed()) { if (loadState == 0) loadState = 2; return true; }
+        $request();
+        return true;
+    }
     public boolean UnloadAudioData() { return true; }
     public boolean GetData(float[] data, int offset) {
         ensure();

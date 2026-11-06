@@ -30,6 +30,8 @@ public abstract class Host {
     public byte[] encodePNG(int w, int h, int[] argb) { return new byte[0]; }
     /** decode compressed audio (OGG Vorbis etc.) to {channels, sampleRate, short[] interleaved pcm}; null if unsupported */
     public Object[] decodeAudio(byte[] data) { return null; }
+    /** incremental decoder for a long clip (path relative to the data root); null = not supported */
+    public AudioStream openAudioStream(String rel) { return null; }
     /** output sample rate of the audio device */
     public int audioRate() { return 48000; }
     /** read a data file relative to the data root */

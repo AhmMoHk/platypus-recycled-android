@@ -62,10 +62,14 @@ public class AudioSource extends AudioBehaviour {
     public int get_timeSamples() { synchronized (AudioMix.lock) { return (int) pos; } }
     public void set_timeSamples(int s) { synchronized (AudioMix.lock) { pos = s; } }
 
+    StreamPlayer $stream;
+
     public void Play() {
         if (clip == null || !get_isActiveAndEnabled()) return;
         clip.$request();
         synchronized (AudioMix.lock) {
+            if ($stream != null) { $stream.close(); $stream = null; }
+            if (clip.$streamed()) $stream = new StreamPlayer(clip, loop);
             playingClip = clip;
             pos = pitch < 0 ? Math.max(0, clip.samples - 1) : 0;
             playing = true;
@@ -76,7 +80,7 @@ public class AudioSource extends AudioBehaviour {
     public void Play(long delay) { Play(); }
     public void PlayDelayed(float d) { Play(); }
     public void PlayScheduled(double t) { Play(); }
-    public void Stop() { synchronized (AudioMix.lock) { playing = false; paused = false; pos = 0; oneShots.clear(); } }
+    public void Stop() { synchronized (AudioMix.lock) { playing = false; paused = false; pos = 0; oneShots.clear(); if ($stream != null) { $stream.close(); $stream = null; } } }
     public void Pause() { synchronized (AudioMix.lock) { if (playing) paused = true; } }
     public void UnPause() { synchronized (AudioMix.lock) { paused = false; } }
     public void PlayOneShot(AudioClip c) { PlayOneShot(c, 1f); }

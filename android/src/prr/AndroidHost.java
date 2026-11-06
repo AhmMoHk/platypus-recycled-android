@@ -103,6 +103,10 @@ public final class AndroidHost extends Host {
 
     /** OGG/MP3/WAV via MediaCodec (see AudioDecode) */
     @Override public Object[] decodeAudio(byte[] bytes) { return AudioDecode.decode(bytes); }
+    @Override public cs.UnityEngine.AudioStream openAudioStream(String rel) {
+        try { return new MediaAudioStream(new File(data, rel).getAbsolutePath()); }
+        catch (Exception e) { Diag.add("audio stream " + rel + ": " + e); return null; }
+    }
     @Override public int audioRate() { return 48000; }
 
     byte[] asset(String name) {

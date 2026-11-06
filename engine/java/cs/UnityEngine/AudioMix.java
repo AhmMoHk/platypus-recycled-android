@@ -25,7 +25,9 @@ public final class AudioMix {
                 float vol = (s.mute ? 0 : s.volume) * (s.ignoreListenerVolume ? 1 : master);
                 if (s.playing && !s.paused && s.playingClip != null) {
                     double[] p = {s.pos};
-                    boolean more = render(s.playingClip, p, s.pitch, s.loop, vol, s.panStereo, frames, rate);
+                    boolean more;
+                    if (s.$stream != null) { s.$stream.loop = s.loop; more = s.$stream.render(acc, frames, rate, vol, s.panStereo, s.pitch); }
+                    else more = render(s.playingClip, p, s.pitch, s.loop, vol, s.panStereo, frames, rate);
                     s.pos = p[0];
                     if (!more) s.playing = false;
                 }
@@ -33,7 +35,10 @@ public final class AudioMix {
                     Object[] o = s.oneShots.get(k);
                     if (!render((AudioClip) o[0], (double[]) o[1], s.pitch, false, vol * (Float) o[2], s.panStereo, frames, rate)) s.oneShots.remove(k);
                 }
-                if (!s.playing && s.oneShots.isEmpty()) active.remove(i);
+                if (!s.playing && s.oneShots.isEmpty()) {
+                    if (s.$stream != null) { s.$stream.close(); s.$stream = null; }
+                    active.remove(i);
+                }
             }
         }
         for (int i = 0; i < frames * 2; i++) {
