@@ -87,15 +87,20 @@ Small, checked patches on the translated code — the build stops if one no long
 * `TouchControls` — clay joystick (red/yellow base, blue knob at 47.5% of the base that follows the thumb 360°,
   clamped, snaps back) and the hold-to-fire button (scales to 0.92 while held); each control tracks its own pointer id
 * `Settings` — frame rate, HighEnd (4K) bundles, 100% unlocked progression (through the game's own save API)
-* `DataImport` — one-time copy of the converted data folder with the system folder picker
+* `DataImport` — first-launch installer: streams the picked zip parts (SAF, no storage permission) into
+  `getFilesDir()/data`, remembers which parts are done, then frees any old copy in `Android/data`
+* APK: min Android 8.0 (API 26), target API 34, pure DEX (no native libraries), `resources.arsc` stored and
+  `zipalign -p 4`, signed v1 + v2 + v3
 
 ## Building
 
 1. Translate the game's assemblies from your install: `tools/xlat.sh` → `gen/java`, `gen/stubs`
-2. Build the APK: `android/build.sh` → `build/PlatypusRecycled.apk` (javac + dx + aapt + apksigner; min Android 7.0)
+2. Build the APK: `android/build.sh` → `build/PlatypusRecycled.apk` (javac + dx + aapt + zipalign + apksigner)
 3. Make the data pack from your own copy (PC, Python 3 + UnityPy + astcenc + ffmpeg):
    `python3 tools/export/convert_assets.py "<game>/Platypus_Data" out --workshop "<steam>/steamapps/workshop/content/<appid>"`
-4. Install the APK, start it, pick the `out` folder when asked.
+4. Zip the pack into parts (each zip holds `data/...`), install the APK, start it and select the parts with the
+   system file picker (all at once or in rounds): the app unpacks them into its internal storage with a progress
+   bar — no file manager copying into `Android/data`.
 
 `desktop/run.sh [frames]` runs the translated game headless on a PC for testing the engine
 (`JOPTS="-Dprr.shots=600,1200 -Dprr.input=600:key@13"` saves software-rendered screenshots and injects keys).

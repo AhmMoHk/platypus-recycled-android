@@ -61,20 +61,26 @@ public final class GlesGfx extends Gfx {
         "precision mediump float;\n" +
         "uniform sampler2D uTex;\n" +
         "uniform vec4 uFogColor;\n" +
-        "uniform float uFogDistance, uFogMul, uEmission, uDayCycle, uTransparency, uBlink, uLayer;\n" +
+        "uniform float uFogDistance, uFogMul, uEmission, uDayCycle, uTransparency, uBlink, uLayer, uTopV, uTopFade;\n" +
         "varying vec4 vCol;\n" +
         "varying vec4 vUV0;\n" +
         "varying vec3 vWorld;\n" +
+        "vec3 lin(vec3 c) { return pow(max(c, vec3(0.0)), vec3(2.2)); }\n" +
+        "vec3 srgb(vec3 c) { return pow(max(c, vec3(0.0)), vec3(1.0 / 2.2)); }\n" +
         "void main() {\n" +
-        "  vec4 c = texture2D(uTex, vUV0.xy) * vCol;\n" +
-        "  if (c.a <= 0.0) discard;\n" +
-        "  c.rgb *= mix(1.0, uDayCycle, step(0.001, uDayCycle));\n" +
+        "  vec4 t = texture2D(uTex, vUV0.xy);\n" +
+        "  float a = t.a * vCol.a;\n" +
+        // ground/water layers fade into the sky over their top edge instead of a hard horizontal cut
+        "  if (uTopFade > 0.0) a *= clamp((uTopV - vUV0.y) / uTopFade, 0.0, 1.0);\n" +
+        "  if (a <= 0.0) discard;\n" +
+        // the game uses Unity's linear colour space: shade in linear, write sRGB
+        "  vec3 c = lin(t.rgb) * lin(vCol.rgb);\n" +
+        "  c *= mix(1.0, uDayCycle, step(0.001, uDayCycle));\n" +
         "  float fog = clamp(uFogDistance * uFogMul, 0.0, 1.0);\n" +
-        "  c.rgb = mix(c.rgb, uFogColor.rgb, fog * uFogColor.a);\n" +
-        "  c.rgb += c.rgb * uEmission;\n" +
-        "  c.rgb = mix(c.rgb, vec3(1.0), uBlink);\n" +
-        "  c.a *= uTransparency;\n" +
-        "  gl_FragColor = c;\n" +
+        "  c = mix(c, lin(uFogColor.rgb), fog * uFogColor.a);\n" +
+        "  c *= uEmission;\n" +
+        "  c = mix(c, vec3(1.0), uBlink);\n" +
+        "  gl_FragColor = vec4(srgb(c), a * uTransparency);\n" +
         "}\n";
 
     /** TextMeshPro distance field (face + outline + underlay) */
@@ -130,9 +136,9 @@ public final class GlesGfx extends Gfx {
         "    hi = mix(uHigh, uHighFlash, f);\n" +
         "    lo = mix(uLow, uLowFlash, f);\n" +
         "  }\n" +
-        "  vec4 c = mix(lo, hi, k) * uTMPColor * vCol;\n" +
-        "  c.a *= t.a;\n" +
-        "  gl_FragColor = c;\n" +
+        // the two tints are the colour (no extra _TMPColor multiply: that is only read back by scripts)
+        "  vec3 c = pow(mix(pow(lo.rgb, vec3(2.2)), pow(hi.rgb, vec3(2.2)), k), vec3(1.0 / 2.2));\n" +
+        "  gl_FragColor = vec4(c * vCol.rgb, mix(lo.a, hi.a, k) * t.a * vCol.a);\n" +
         "}\n";
 
     /** MultiTintShader: each source channel picks its own high/low tint */
@@ -340,7 +346,19 @@ public final class GlesGfx extends Gfx {
                 GLES20.glUniform4f(u(p, "uFogColor"), fog[0], fog[1], fog[2], fog[3]);
                 GLES20.glUniform1f(u(p, "uFogDistance"), prop(it, P_FOGDIST, 0));
                 GLES20.glUniform1f(u(p, "uFogMul"), prop(it, P_FOGMUL, 1));
-                GLES20.glUniform1f(u(p, "uEmission"), prop(it, P_EMISSION, 0));
+                GLES20.glUniform1f(u(p, "uEmission"), prop(it, P_EMISSION, 1));   // day/night multiplier (0.2 .. 1)
+                float topV = 0, topFade = 0;
+                if (it.mat != null && it.uv0 != null && it.count > 0) {
+                    String mn = it.mat.get_name();
+                    if (mn != null && mn.contains("Ground")) {
+                        float lo = 1e9f, hi = -1e9f;
+                        for (int i = 0; i < it.count; i++) { float v = it.uv0[i * 4 + 1]; lo = Math.min(lo, v); hi = Math.max(hi, v); }
+                        topV = hi;
+                        topFade = (hi - lo) * 0.08f;
+                    }
+                }
+                GLES20.glUniform1f(u(p, "uTopV"), topV);
+                GLES20.glUniform1f(u(p, "uTopFade"), topFade);
                 GLES20.glUniform1f(u(p, "uDayCycle"), prop(it, P_DAY, 0));
                 GLES20.glUniform1f(u(p, "uTransparency"), prop(it, P_TRANSP, 1));
                 GLES20.glUniform1f(u(p, "uLayer"), prop(it, P_LAYER, 0));

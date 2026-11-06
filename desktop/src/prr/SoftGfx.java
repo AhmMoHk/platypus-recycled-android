@@ -117,7 +117,7 @@ final class SoftGfx extends Gfx {
         float[] face = vec(it, P_FACECOLOR, new float[]{1, 1, 1, 1}), outline = vec(it, P_OUTLINECOLOR, new float[]{0, 0, 0, 1});
         float ow = flt(it, P_OUTLINEWIDTH, 0);
         float[] hi = vec(it, P_HIGH, new float[]{1, 1, 1, 1}), lo = vec(it, P_LOW, new float[]{1, 1, 1, 1}), tc = vec(it, P_TMPCOLOR, new float[]{1, 1, 1, 1});
-        float thr = flt(it, P_THRESHOLD, .5f);
+        float thr = flt(it, P_THRESHOLD, .5f), sm = Math.max(.001f, flt(it, Shader.PropertyToID("_Smoothness"), .05f));
         boolean stencilTest = it.stencilRef != 0 || it.stencilComp != 8;
         int n = it.count;
         float[] sx = new float[n], sy = new float[n];
@@ -175,9 +175,9 @@ final class SoftGfx extends Gfx {
                             r *= face[0] * fa + outline[0] * (1 - fa); g *= face[1] * fa + outline[1] * (1 - fa); bl *= face[2] * fa + outline[2] * (1 - fa);
                             al *= Math.max(fa, oa) * face[3];
                         } else if (morph) {
-                            float l = .299f * tr + .587f * tg + .114f * tb, kk = l > thr ? 1 : 0;
-                            r *= (lo[0] + (hi[0] - lo[0]) * kk) * tc[0]; g *= (lo[1] + (hi[1] - lo[1]) * kk) * tc[1]; bl *= (lo[2] + (hi[2] - lo[2]) * kk) * tc[2];
-                            al *= ta * tc[3];
+                            float l = .299f * tr + .587f * tg + .114f * tb, kk = smooth(thr - sm, thr + sm, l);
+                            r *= lo[0] + (hi[0] - lo[0]) * kk; g *= lo[1] + (hi[1] - lo[1]) * kk; bl *= lo[2] + (hi[2] - lo[2]) * kk;
+                            al *= ta;
                         } else {
                             r *= tr; g *= tg; bl *= tb; al *= ta;
                         }

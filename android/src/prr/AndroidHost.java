@@ -21,7 +21,7 @@ public final class AndroidHost extends Host {
 
     AndroidHost(Context c) {
         ctx = c;
-        data = new File(c.getExternalFilesDir(null), "data");
+        data = new File(c.getFilesDir(), "data");     // internal storage: filled by DataImport from the zip parts
         save = new File(c.getFilesDir(), "save");
         data.mkdirs();
         save.mkdirs();

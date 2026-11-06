@@ -348,11 +348,11 @@ public final class MainActivity extends Activity {
     @Override protected void onActivityResult(int req, int res, android.content.Intent data) {
         super.onActivityResult(req, res, data);
         if (req != DataImport.REQ) return;
-        if (res != RESULT_OK || data == null || data.getData() == null) {
+        if (res != RESULT_OK || data == null || (data.getData() == null && data.getClipData() == null)) {
             DataImport.prompt(this, host);
             return;
         }
-        DataImport.onResult(this, host, data.getData(), new Runnable() {
+        DataImport.onResult(this, host, data, new Runnable() {
             public void run() { dataReady = true; }
         });
     }

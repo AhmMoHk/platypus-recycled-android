@@ -3,40 +3,59 @@ package prr;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
+import android.content.ClipData;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
-import android.os.Build;
-import android.provider.DocumentsContract;
+import android.provider.OpenableColumns;
 
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FilterInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
- * One-time import of the converted game data. The data pack is produced on a PC by tools/convert_assets.py
- * from the user's own copy of the game; here it is copied into the app's external files directory with the
- * system folder picker (no storage permission needed).
+ * First-launch installer for the converted game data. The data pack (made from the user's own copy with
+ * tools/export/convert_assets.py) comes as a few zip parts, PlatypusRecycled-data-part1of5.zip ... part5of5.zip.
+ * The user picks them with the system file picker (no storage permission); the app streams each zip and
+ * extracts it into its internal storage (getFilesDir()/data), so no file manager ever has to copy thousands of
+ * loose files into Android/data. Parts can be picked all at once or in several rounds.
  */
 final class DataImport {
     private DataImport() {}
     static final int REQ = 4711;
+    private static final Pattern PART = Pattern.compile("part(\\d+)of(\\d+)", Pattern.CASE_INSENSITIVE);
 
     static boolean isReady(AndroidHost host) {
-        return new File(host.data, "unity/meta.json").exists();
+        return new File(host.data, ".installed").exists() && new File(host.data, "unity/meta.json").exists();
     }
 
     static void prompt(final Activity a, final AndroidHost host) {
+        TreeSet<Integer> done = new TreeSet<>();
+        int n = readParts(host, done);
+        String have = n > 0 ? "\n\nInstalled so far: " + done.size() + " of " + n + " parts. Missing: " + missing(done, n) + "." : "";
         new AlertDialog.Builder(a)
-            .setTitle("Game data")
-            .setMessage("Select the converted data folder (made on your PC from your own copy of the game with tools/convert_assets.py).")
+            .setTitle("Install game data")
+            .setMessage("Select the data parts (PlatypusRecycled-data-part1of5.zip ... part5of5.zip, usually in Download). "
+                + "You can select all of them at once — they are unpacked inside the app." + have)
             .setCancelable(false)
-            .setPositiveButton("Choose folder", new android.content.DialogInterface.OnClickListener() {
+            .setPositiveButton("Select parts", new android.content.DialogInterface.OnClickListener() {
                 public void onClick(android.content.DialogInterface d, int w) {
-                    if (Build.VERSION.SDK_INT >= 21) {
-                        a.startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), REQ);
-                    } else {
-                        new AlertDialog.Builder(a).setMessage("Copy the data folder to:\n" + host.data.getAbsolutePath()).show();
-                    }
+                    Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("*/*");
+                    i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream"});
+                    i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    a.startActivityForResult(i, REQ);
                 }
             })
             .setNegativeButton("Quit", new android.content.DialogInterface.OnClickListener() {
@@ -45,93 +64,178 @@ final class DataImport {
             .show();
     }
 
-    static void onResult(final Activity a, final AndroidHost host, final Uri tree, final Runnable done) {
+    static void onResult(final Activity a, final AndroidHost host, Intent data, final Runnable done) {
+        final ArrayList<Uri> uris = new ArrayList<>();
+        ClipData clip = data.getClipData();
+        if (clip != null) for (int i = 0; i < clip.getItemCount(); i++) uris.add(clip.getItemAt(i).getUri());
+        else if (data.getData() != null) uris.add(data.getData());
+        if (uris.isEmpty()) { prompt(a, host); return; }
         final ProgressDialog p = new ProgressDialog(a);
         p.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
-        p.setTitle("Importing game data");
+        p.setTitle("Installing game data");
+        p.setMessage("Preparing…");
         p.setCancelable(false);
-        p.setMax(100);
+        p.setMax(1000);
         p.show();
         new Thread(new Runnable() {
             public void run() {
-                final String err = copyTree(a, host, tree, p);
+                final String err = install(a, host, uris, p);
                 a.runOnUiThread(new Runnable() {
                     public void run() {
                         p.dismiss();
                         if (err != null) {
-                            new AlertDialog.Builder(a).setTitle("Import failed").setMessage(err).show();
+                            new AlertDialog.Builder(a).setTitle("Install failed").setMessage(err).setCancelable(false)
+                                .setPositiveButton("OK", new android.content.DialogInterface.OnClickListener() {
+                                    public void onClick(android.content.DialogInterface d, int w) { prompt(a, host); }
+                                }).show();
+                        } else if (!isReady(host)) {
+                            prompt(a, host);     // more parts to go
                         } else {
+                            cleanLegacy(a);
                             done.run();
                         }
                     }
                 });
             }
-        }, "prr-import").start();
+        }, "prr-install").start();
     }
 
-    private static String copyTree(Activity a, AndroidHost host, Uri tree, ProgressDialog p) {
+    // ------------------------------------------------------------------ extraction
+    private static String install(final Activity a, AndroidHost host, ArrayList<Uri> uris, final ProgressDialog p) {
         try {
-            if (Build.VERSION.SDK_INT < 21) return "Android 5.0 or newer is required for the folder picker.";
-            Uri root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
-            long[] counted = {0, 0};
-            count(a, tree, root, counted);
-            if (counted[0] == 0) return "The selected folder is empty.";
+            File root = host.data.getParentFile();          // zip entries are "data/..."
             host.data.mkdirs();
-            copy(a, tree, root, host.data, p, counted, new long[]{0});
-            if (!isReady(host)) return "unity/meta.json was not found in the selected folder — pick the folder that contains it.";
+            String[] names = new String[uris.size()];
+            long[] sizes = new long[uris.size()];
+            long total = 0;
+            for (int i = 0; i < uris.size(); i++) {
+                names[i] = "part";
+                sizes[i] = -1;
+                Cursor c = a.getContentResolver().query(uris.get(i), new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE}, null, null, null);
+                if (c != null) {
+                    if (c.moveToFirst()) {
+                        if (!c.isNull(0)) names[i] = c.getString(0);
+                        if (!c.isNull(1)) sizes[i] = c.getLong(1);
+                    }
+                    c.close();
+                }
+                total += Math.max(0, sizes[i]);
+            }
+            TreeSet<Integer> done = new TreeSet<>();
+            int n = readParts(host, done);
+            final long[] read = {0};
+            final long tot = Math.max(1, total);
+            byte[] buf = new byte[1 << 20];
+            for (int i = 0; i < uris.size(); i++) {
+                Matcher m = PART.matcher(names[i]);
+                int part = 1, of = 1;
+                if (m.find()) { part = Integer.parseInt(m.group(1)); of = Integer.parseInt(m.group(2)); }
+                if (n > 0 && of != n) return names[i] + " belongs to a different data pack (" + of + " parts instead of " + n + ").";
+                n = of;
+                final String label = "Part " + part + " of " + of + " — " + names[i];
+                a.runOnUiThread(new Runnable() { public void run() { p.setMessage(label); } });
+                InputStream raw = a.getContentResolver().openInputStream(uris.get(i));
+                if (raw == null) return "Cannot open " + names[i];
+                final long base = read[0];
+                InputStream counted = new FilterInputStream(new BufferedInputStream(raw, 1 << 20)) {
+                    long last;
+                    @Override public int read(byte[] b, int off, int len) throws IOException {
+                        int r = super.read(b, off, len);
+                        if (r > 0) { read[0] += r; tick(); }
+                        return r;
+                    }
+                    @Override public int read() throws IOException {
+                        int r = super.read();
+                        if (r >= 0) { read[0]++; tick(); }
+                        return r;
+                    }
+                    void tick() {
+                        if (read[0] - last < (4 << 20)) return;
+                        last = read[0];
+                        final int v = (int) (read[0] * 1000 / tot);
+                        a.runOnUiThread(new Runnable() { public void run() { p.setProgress(v); } });
+                    }
+                };
+                int files = 0;
+                ZipInputStream z = new ZipInputStream(counted);
+                try {
+                    ZipEntry e;
+                    String rootPath = root.getCanonicalPath() + File.separator;
+                    while ((e = z.getNextEntry()) != null) {
+                        String name = e.getName().replace('\\', '/');
+                        if (!name.startsWith("data/")) name = "data/" + name;   // packs zipped without the top folder
+                        File out = new File(root, name);
+                        if (!out.getCanonicalPath().startsWith(rootPath)) continue;   // no ../ escapes
+                        if (e.isDirectory()) { out.mkdirs(); continue; }
+                        out.getParentFile().mkdirs();
+                        FileOutputStream o = new FileOutputStream(out);
+                        try {
+                            int r;
+                            while ((r = z.read(buf)) > 0) o.write(buf, 0, r);
+                        } finally {
+                            o.close();
+                        }
+                        files++;
+                    }
+                } finally {
+                    z.close();
+                }
+                if (files == 0) return names[i] + " is not a data pack zip.";
+                if (sizes[i] < 0) read[0] = base;    // unknown size: progress stays per part
+                done.add(part);
+                writeParts(host, done, n);
+            }
+            if (done.size() >= n && new File(host.data, "unity/meta.json").exists()) {
+                new FileOutputStream(new File(host.data, ".installed")).close();
+            }
             return null;
         } catch (Exception e) {
-            return String.valueOf(e);
+            return "Error: " + e;
         }
     }
 
-    private static void count(Activity a, Uri tree, Uri dir, long[] out) {
-        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getDocumentId(dir));
-        android.database.Cursor c = a.getContentResolver().query(children,
-            new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.COLUMN_SIZE}, null, null, null);
-        if (c == null) return;
+    private static int readParts(AndroidHost host, TreeSet<Integer> done) {
+        File f = new File(host.data, ".parts");
+        if (!f.exists()) return 0;
         try {
-            while (c.moveToNext()) {
-                String id = c.getString(0), mime = c.getString(1);
-                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) count(a, tree, DocumentsContract.buildDocumentUriUsingTree(tree, id), out);
-                else { out[0]++; out[1] += c.getLong(2); }
-            }
-        } finally {
-            c.close();
+            byte[] b = new byte[(int) f.length()];
+            FileInputStream in = new FileInputStream(f);
+            int k = 0, r;
+            while (k < b.length && (r = in.read(b, k, b.length - k)) > 0) k += r;
+            in.close();
+            String[] s = new String(b, "UTF-8").trim().split("\\s+");
+            int n = Integer.parseInt(s[0]);
+            for (int i = 1; i < s.length; i++) done.add(Integer.parseInt(s[i]));
+            return n;
+        } catch (Exception e) {
+            return 0;
         }
     }
 
-    private static void copy(Activity a, Uri tree, Uri dir, File dst, ProgressDialog p, long[] total, long[] done) throws Exception {
-        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getDocumentId(dir));
-        android.database.Cursor c = a.getContentResolver().query(children,
-            new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.COLUMN_DISPLAY_NAME}, null, null, null);
-        if (c == null) return;
-        try {
-            while (c.moveToNext()) {
-                String id = c.getString(0), mime = c.getString(1), name = c.getString(2);
-                Uri u = DocumentsContract.buildDocumentUriUsingTree(tree, id);
-                File target = new File(dst, name);
-                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
-                    target.mkdirs();
-                    copy(a, tree, u, target, p, total, done);
-                } else {
-                    InputStream in = a.getContentResolver().openInputStream(u);
-                    FileOutputStream out = new FileOutputStream(target);
-                    try {
-                        byte[] buf = new byte[262144];
-                        int n;
-                        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-                    } finally {
-                        out.close();
-                        if (in != null) in.close();
-                    }
-                    done[0]++;
-                    final int pct = (int) (done[0] * 100 / Math.max(1, total[0]));
-                    p.setProgress(pct);
-                }
-            }
-        } finally {
-            c.close();
-        }
+    private static void writeParts(AndroidHost host, TreeSet<Integer> done, int n) throws IOException {
+        StringBuilder sb = new StringBuilder().append(n);
+        for (int d : done) sb.append(' ').append(d);
+        FileOutputStream o = new FileOutputStream(new File(host.data, ".parts"));
+        o.write(sb.toString().getBytes("UTF-8"));
+        o.close();
+    }
+
+    private static String missing(TreeSet<Integer> done, int n) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= n; i++) if (!done.contains(i)) sb.append(sb.length() > 0 ? ", " : "").append(i);
+        return sb.length() == 0 ? "none" : sb.toString();
+    }
+
+    /** an older, partial copy in Android/data/<pkg>/files/data is no longer used: free its space */
+    private static void cleanLegacy(final Activity a) {
+        final File old = new File(a.getExternalFilesDir(null), "data");
+        if (!old.exists()) return;
+        new Thread(new Runnable() { public void run() { delete(old); } }, "prr-clean").start();
+    }
+
+    private static void delete(File f) {
+        File[] l = f.listFiles();
+        if (l != null) for (File c : l) delete(c);
+        f.delete();
     }
 }

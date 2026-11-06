@@ -25,9 +25,9 @@ final class TouchControls {
     private long firePressNanos;
 
     void load(AndroidHost host) {
-        base = tex(host, "joystick_base.png");
-        knob = tex(host, "joystick_knob.png");
-        fire = tex(host, "fire_button.png");
+        base = tex(host, "1000045163.png");   // hollow red clay ring: fixed joystick base (bottom-left)
+        knob = tex(host, "1000045164.png");   // solid blue clay disc: knob, 47.5% of the ring, follows the thumb 360°
+        fire = tex(host, "1000045153.png");   // red ring + yellow crosshair + blue dot: fire button (bottom-right)
         gear = gearTexture();
         layout();
     }

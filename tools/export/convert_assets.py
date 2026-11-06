@@ -192,6 +192,11 @@ def raw_texture_image(d, nodes):
     if fmt == 1:
         a = Image.frombytes('L', (w, h), raw[:w * h])
         return Image.merge('RGBA', (Image.new('L', (w, h), 255),) * 3 + (a,))
+    if fmt == 14:      # BGRA32
+        return Image.frombytes('RGBA', (w, h), raw[:w * h * 4], 'raw', 'BGRA')
+    if fmt == 63:      # R8: used as a mask -> white with alpha = r
+        a = Image.frombytes('L', (w, h), raw[:w * h])
+        return Image.merge('RGBA', (Image.new('L', (w, h), 255),) * 3 + (a,))
     import texture2ddecoder
     if fmt == 12:
         return Image.frombytes('RGBA', (w, h), texture2ddecoder.decode_bc3(raw, w, h), 'raw', 'BGRA')
