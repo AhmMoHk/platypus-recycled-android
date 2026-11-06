@@ -5,6 +5,7 @@
     setup_project.bat                       (finds the game: Steam default, Steam libraries, or asks you)
     setup_project.bat "E:\Games\Platypus Reclayed"
     setup_project.bat -GameDir "E:\Games\Platypus Reclayed" -OutDir "D:\PRA" -WorkshopDir "E:\...\2912430"
+    setup_project.bat -Update               (a newer kit into the project you already have: seconds, no export)
 
   Steps: find the game -> export it with AssetRipper 2.0.0 (base game + the HighEnd mod bundles) -> copy the
   loose mod files and your Workshop items -> drop Steam / Epic / Xbox / Rewired -> add the port (input, touch
@@ -16,7 +17,8 @@ param(
     [string]$WorkshopDir = "",
     [string]$AssetRipper = "",          # AssetRipper.GUI.Free.exe or AssetRipper_win_x64.zip (else downloaded)
     [int]$Port = 0,
-    [switch]$Force                      # overwrite an existing project folder
+    [switch]$Force,                     # overwrite an existing project folder
+    [switch]$Update                     # only bring an existing project up to this kit (no new export)
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -30,6 +32,75 @@ function Say($m)  { Write-Host "==> $m" -ForegroundColor Cyan }
 function Note($m) { Write-Host "    $m" }
 function Warn($m) { Write-Host "    ! $m" -ForegroundColor Yellow }
 function Fail($m) { Write-Host ""; Write-Host "ERROR: $m" -ForegroundColor Red; exit 1 }
+
+# ------------------------------------------------------------------------------------------- 7. code (the port itself)
+# Also run alone by -Update: an updated kit goes into an existing project without exporting the game again.
+function Apply-Port {
+    Say 'Removing Steam, Epic, Xbox and the Windows input library'
+    foreach ($n in $Removed) {
+        $d = Join-Path $Scripts $n
+        if (Test-Path -LiteralPath $d) { Remove-Item -LiteralPath $d -Recurse -Force }
+        if (Test-Path -LiteralPath "$d.meta") { Remove-Item -LiteralPath "$d.meta" -Force }
+    }
+    # Rewired is replaced by the port's small stand-in. Its scripts that scenes reference keep their file (and .meta, so
+    # the GUID) and get the stand-in's content from Overrides; all other Rewired sources go.
+    $ovScripts = Join-Path $Kit 'Overrides\Assets\Scripts'
+    foreach ($sub in @('Rewired_Core', 'Assembly-CSharp\Rewired')) {
+        $d = Join-Path $Scripts $sub
+        if (-not (Test-Path -LiteralPath $d)) { continue }
+        foreach ($cs in Get-ChildItem -LiteralPath $d -Recurse -Filter '*.cs' -File) {
+            $rel = $cs.FullName.Substring($Scripts.Length + 1)
+            if (-not (Test-Path -LiteralPath (Join-Path $ovScripts $rel))) {
+                Remove-Item -LiteralPath $cs.FullName -Force
+                if (Test-Path -LiteralPath "$($cs.FullName).meta") { Remove-Item -LiteralPath "$($cs.FullName).meta" -Force }
+            }
+        }
+    }
+
+    Say 'Adding the Android port (input, clay touch controls, shaders, build script)'
+    & robocopy (Join-Path $Kit 'Overrides') "$Project" /E /NFL /NDL /NJH /NJS /NP /R:1 /W:1 | Out-Null
+    if ($LASTEXITCODE -ge 8) { Fail "copying Overrides failed (robocopy $LASTEXITCODE)" }
+    foreach ($png in @('1000045163.png', '1000045164.png', '1000045153.png')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Assets "PlatypusAndroid\Resources\$png"))) { Fail "touch control image missing: $png" }
+    }
+
+    Say 'Applying patches.json to the game code'
+    $P = Get-Content -LiteralPath (Join-Path $Kit 'patches.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    foreach ($rel in $P.delete) {
+        $f = Join-Path $Scripts $rel
+        if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Recurse -Force }
+        if (Test-Path -LiteralPath "$f.meta") { Remove-Item -LiteralPath "$f.meta" -Force }
+    }
+    $bad = 0; $already = 0
+    foreach ($e in $P.patches) {
+        $f = Join-Path $Scripts $e.file
+        if (-not (Test-Path -LiteralPath $f)) { Warn "missing file $($e.file)"; $bad++; continue }
+        $s = [IO.File]::ReadAllText($f).Replace("`r`n", "`n")
+        $want = if ($e.PSObject.Properties['count']) { [int]$e.count } else { 1 }
+        $n = ([regex]::Matches($s, [regex]::Escape($e.old))).Count
+        if ($e.new -and $s.Contains($e.new)) { $already++; continue }                 # applied by an earlier run
+        if ($n -eq 0 -and -not $e.new) { $already++; continue }
+        if ($n -ne $want) { Warn ("patch not applied ({0} matches, expected {1}): {2}: {3}" -f $n, $want, $e.file, $e.old.Substring(0, [Math]::Min(60, $e.old.Length))); $bad++; continue }
+        [IO.File]::WriteAllText($f, $s.Replace($e.old, $e.new), $utf8)
+    }
+    Note ("{0}/{1} patches applied ({2} were already in place)" -f ($P.patches.Count - $bad), $P.patches.Count, $already)
+    if ($bad) { Fail 'some patches did not apply: this export differs from the one the kit was made for (game update?)' }
+
+}
+
+if ($Update) {
+    if (-not $OutDir) { $OutDir = Join-Path $env:USERPROFILE 'PRA' }
+    $marker = Join-Path $OutDir 'project.txt'
+    $Project = if (Test-Path -LiteralPath $marker) { (Get-Content -LiteralPath $marker -Raw).Trim() } else { Join-Path $OutDir 'Project' }
+    $Assets = Join-Path $Project 'Assets'; $Scripts = Join-Path $Assets 'Scripts'
+    if (-not (Test-Path -LiteralPath (Join-Path $Scripts 'Platypus\Platypus.asmdef'))) { Fail "no project at $Project (run setup_project.bat without -Update first)" }
+    Say "Updating the port in $Project"
+    Apply-Port
+    Write-Host ""
+    Write-Host "Done. Next: build_android.bat" -ForegroundColor Green
+    exit 0
+}
 
 # ------------------------------------------------------------------------------------------- 1. the game folder
 function Resolve-GameDir([string]$p) {
@@ -264,55 +335,7 @@ if ($WorkshopDir) {
 Note "workshop items: $ws"
 
 # ------------------------------------------------------------------------------------------- 7. code
-Say 'Removing Steam, Epic, Xbox and the Windows input library'
-foreach ($n in $Removed) {
-    $d = Join-Path $Scripts $n
-    if (Test-Path -LiteralPath $d) { Remove-Item -LiteralPath $d -Recurse -Force }
-    if (Test-Path -LiteralPath "$d.meta") { Remove-Item -LiteralPath "$d.meta" -Force }
-}
-# Rewired is replaced by the port's small stand-in. Its scripts that scenes reference keep their file (and .meta, so
-# the GUID) and get the stand-in's content from Overrides; all other Rewired sources go.
-$ovScripts = Join-Path $Kit 'Overrides\Assets\Scripts'
-foreach ($sub in @('Rewired_Core', 'Assembly-CSharp\Rewired')) {
-    $d = Join-Path $Scripts $sub
-    if (-not (Test-Path -LiteralPath $d)) { continue }
-    foreach ($cs in Get-ChildItem -LiteralPath $d -Recurse -Filter '*.cs' -File) {
-        $rel = $cs.FullName.Substring($Scripts.Length + 1)
-        if (-not (Test-Path -LiteralPath (Join-Path $ovScripts $rel))) {
-            Remove-Item -LiteralPath $cs.FullName -Force
-            if (Test-Path -LiteralPath "$($cs.FullName).meta") { Remove-Item -LiteralPath "$($cs.FullName).meta" -Force }
-        }
-    }
-}
-
-Say 'Adding the Android port (input, clay touch controls, shaders, build script)'
-& robocopy (Join-Path $Kit 'Overrides') "$Project" /E /NFL /NDL /NJH /NJS /NP /R:1 /W:1 | Out-Null
-if ($LASTEXITCODE -ge 8) { Fail "copying Overrides failed (robocopy $LASTEXITCODE)" }
-foreach ($png in @('1000045163.png', '1000045164.png', '1000045153.png')) {
-    if (-not (Test-Path -LiteralPath (Join-Path $Assets "PlatypusAndroid\Resources\$png"))) { Fail "touch control image missing: $png" }
-}
-
-Say 'Applying patches.json to the game code'
-$P = Get-Content -LiteralPath (Join-Path $Kit 'patches.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-$utf8 = New-Object System.Text.UTF8Encoding($false)
-foreach ($rel in $P.delete) {
-    $f = Join-Path $Scripts $rel
-    if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Recurse -Force }
-    if (Test-Path -LiteralPath "$f.meta") { Remove-Item -LiteralPath "$f.meta" -Force }
-}
-$bad = 0
-foreach ($e in $P.patches) {
-    $f = Join-Path $Scripts $e.file
-    if (-not (Test-Path -LiteralPath $f)) { Warn "missing file $($e.file)"; $bad++; continue }
-    $s = [IO.File]::ReadAllText($f).Replace("`r`n", "`n")
-    $want = if ($e.PSObject.Properties['count']) { [int]$e.count } else { 1 }
-    $n = ([regex]::Matches($s, [regex]::Escape($e.old))).Count
-    if ($n -ne $want) { Warn ("patch not applied ({0} matches, expected {1}): {2}: {3}" -f $n, $want, $e.file, $e.old.Substring(0, [Math]::Min(60, $e.old.Length))); $bad++; continue }
-    [IO.File]::WriteAllText($f, $s.Replace($e.old, $e.new), $utf8)
-}
-Note ("{0}/{1} patches applied" -f ($P.patches.Count - $bad), $P.patches.Count)
-if ($bad) { Fail 'some patches did not apply: this export differs from the one the kit was made for (game update?)' }
-
+Apply-Port
 Set-Content -LiteralPath (Join-Path $OutDir 'project.txt') -Value $Project -Encoding UTF8
 Remove-View                                                   # links first: never recurse through a junction
 Remove-Item -LiteralPath $Work -Recurse -Force -ErrorAction SilentlyContinue

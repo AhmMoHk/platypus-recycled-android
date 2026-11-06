@@ -110,7 +110,15 @@ namespace PlatypusAndroid.EditorTools
             PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
             PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.OpenGLES3 });
             PlayerSettings.runInBackground = false;
+            // No "Made with Unity": Unity 6 lets a Personal licence switch the splash off. Unity 2022 Personal always
+            // shows it, whatever this says (the build then logs a warning).
+            PlayerSettings.SplashScreen.show = false;
             PlayerSettings.SplashScreen.showUnityLogo = false;
+            if (Application.unityVersion.StartsWith("2022", StringComparison.Ordinal))
+                Debug.LogWarning("[PlatypusAndroid] Unity 2022 Personal always shows the Made with Unity splash; build with Unity 6 to remove it");
+            // Unity 6 defaults to GameActivity; the port is made and tested for the classic Activity entry point
+            var entry = typeof(PlayerSettings.Android).GetProperty("applicationEntry");
+            if (entry != null) entry.SetValue(null, Enum.ToObject(entry.PropertyType, 1));        // AndroidApplicationEntry.Activity
 
             var icon = AssetDatabase.LoadAssetAtPath<Texture2D>(IconPath);
             if (icon != null) PlayerSettings.SetIconsForTargetGroup(BuildTargetGroup.Unknown, new[] { icon });

@@ -1,6 +1,6 @@
 <#
   Platypus Reclayed -> Android: builds the APK from the project made by setup_project.bat.
-    build_android.bat                                  (finds Unity 2022.3.62f2 through Unity Hub)
+    build_android.bat                                  (finds Unity 6 or 2022.3.62f2 through Unity Hub)
     build_android.bat "D:\Unity\2022.3.62f2\Editor\Unity.exe"
     build_android.bat -Astc 4x4                        (texture quality: 4x4 best/biggest, 6x6 default, 8x8 smallest)
 #>
@@ -25,31 +25,42 @@ if (-not (Test-Path -LiteralPath (Join-Path $Project 'Assets\PlatypusAndroid\Edi
 $OutDir = Split-Path -Parent $Project
 
 # ------------------------------------------------------------------------------------------- Unity
+# Unity 6 (6000.x, free Personal licence) can build without the "Made with Unity" splash, so it is preferred;
+# 2022.3.62f2 (the game's own version) also works but always shows the splash.
+function Get-UnityVersion([string]$exe) { $v = Split-Path -Leaf (Split-Path -Parent (Split-Path -Parent $exe)); if ($v -match '^\d+\.\d+\.\d+') { $v } else { '' } }
 function Find-Unity {
-    $c = New-Object System.Collections.Generic.List[string]
-    if ($env:UNITY_EXE) { $c.Add($env:UNITY_EXE) }
-    $c.Add("$env:ProgramFiles\Unity\Hub\Editor\$Version\Editor\Unity.exe")
-    $c.Add("${env:ProgramFiles(x86)}\Unity\Hub\Editor\$Version\Editor\Unity.exe")
-    $c.Add("$env:ProgramFiles\Unity $Version\Editor\Unity.exe")
+    $roots = New-Object System.Collections.Generic.List[string]
+    $exes = New-Object System.Collections.Generic.List[string]
+    if ($env:UNITY_EXE) { $exes.Add($env:UNITY_EXE) }
+    foreach ($r in @("$env:ProgramFiles\Unity\Hub\Editor", "${env:ProgramFiles(x86)}\Unity\Hub\Editor")) { $roots.Add($r) }
+    foreach ($drive in [IO.DriveInfo]::GetDrives()) { if ($drive.DriveType -eq 'Fixed') { $roots.Add((Join-Path $drive.RootDirectory.FullName 'Program Files\Unity\Hub\Editor')); $roots.Add((Join-Path $drive.RootDirectory.FullName 'Unity\Hub\Editor')) } }
     foreach ($f in @("$env:APPDATA\UnityHub\secondaryInstallPath.json", "$env:APPDATA\UnityHub\editors.json", "$env:APPDATA\UnityHub\editors-v2.json")) {
         if (-not (Test-Path -LiteralPath $f)) { continue }
-        $t = Get-Content -LiteralPath $f -Raw
-        foreach ($m in [regex]::Matches($t, '"([A-Za-z]:\\\\[^"]+?)"')) {
+        foreach ($m in [regex]::Matches((Get-Content -LiteralPath $f -Raw), '"([A-Za-z]:\\\\[^"]+?)"')) {
             $p = $m.Groups[1].Value -replace '\\\\', '\'
-            if ($p -like '*.exe') { $c.Add($p) } else { $c.Add((Join-Path $p "$Version\Editor\Unity.exe")); $c.Add((Join-Path $p 'Editor\Unity.exe')) }
+            if ($p -like '*.exe') { $exes.Add($p) } else { $roots.Add($p) }
         }
     }
-    foreach ($drive in [IO.DriveInfo]::GetDrives()) { if ($drive.DriveType -eq 'Fixed') { $c.Add((Join-Path $drive.RootDirectory.FullName "Program Files\Unity\Hub\Editor\$Version\Editor\Unity.exe")) } }
-    foreach ($p in $c) { if ($p -and (Test-Path -LiteralPath $p) -and ($p -like "*$Version*")) { return $p } }
-    foreach ($p in $c) { if ($p -and (Test-Path -LiteralPath $p)) { return $p } }
-    return $null
+    foreach ($r in ($roots | Select-Object -Unique)) {
+        if (-not (Test-Path -LiteralPath $r)) { continue }
+        foreach ($d in Get-ChildItem -LiteralPath $r -Directory -ErrorAction SilentlyContinue) { $exes.Add((Join-Path $d.FullName 'Editor\Unity.exe')) }
+    }
+    $found = $exes | Select-Object -Unique | Where-Object { $_ -and (Test-Path -LiteralPath $_) -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_) 'Data\PlaybackEngines\AndroidPlayer')) }
+    $rank = {
+        $v = Get-UnityVersion $_
+        if ($v -like '6000.0.*') { 0 } elseif ($v -like '6000.*') { 1 } elseif ($v -eq $Version) { 2 } elseif ($v -like '2022.3.*') { 3 } else { 9 }
+    }
+    $best = $found | Sort-Object @{ Expression = $rank }, @{ Expression = { try { [version]((Get-UnityVersion $_) -replace '[a-z].*$', '') } catch { [version]'0.0' } }; Descending = $true } | Select-Object -First 1
+    return $best
 }
 if ($Unity) { $Unity = $Unity.Trim('"'); if (Test-Path -LiteralPath $Unity -PathType Container) { $Unity = Join-Path $Unity 'Unity.exe' } }
 else { $Unity = Find-Unity }
-if (-not $Unity -or -not (Test-Path -LiteralPath $Unity)) { Fail "Unity $Version not found. Install it with Unity Hub (with Android Build Support), or pass the path to Unity.exe" }
-if ($Unity -notlike "*$Version*") { Write-Host "    ! $Unity is not $Version; the project was exported for $Version" -ForegroundColor Yellow }
+if (-not $Unity -or -not (Test-Path -LiteralPath $Unity)) { Fail "no Unity with Android Build Support found. Install Unity 6 (6000.0 LTS) with Unity Hub and tick Android Build Support (+ SDK & NDK, OpenJDK), or pass the path to Unity.exe" }
 $android = Join-Path (Split-Path -Parent $Unity) 'Data\PlaybackEngines\AndroidPlayer'
-if (-not (Test-Path -LiteralPath $android)) { Fail "Android Build Support is not installed for this Unity (Unity Hub > Installs > $Version > Add modules > Android Build Support + SDK & NDK + OpenJDK)" }
+if (-not (Test-Path -LiteralPath $android)) { Fail "Android Build Support is not installed for $Unity (Unity Hub > Installs > Add modules > Android Build Support + SDK & NDK + OpenJDK)" }
+$uv = Get-UnityVersion $Unity
+if ($uv -like '6000.*') { Write-Host "    Unity ${uv}: no Made with Unity splash" -ForegroundColor Green }
+else { Write-Host "    ! Unity $uv shows the Made with Unity splash (Personal licence). Install Unity 6 (6000.0 LTS) to remove it." -ForegroundColor Yellow }
 Write-Host "    unity:   $Unity"
 Write-Host "    project: $Project"
 
@@ -58,7 +69,7 @@ $apk = Join-Path $OutDir 'PlatypusReclayed.apk'
 $log = Join-Path $OutDir 'build_android.log'
 if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log -Force }
 Say "Building (the first run imports and encodes all the art: 30-90 minutes; later runs are much faster)"
-$uargs = @('-batchmode', '-quit', '-projectPath', "`"$Project`"", '-buildTarget', 'Android',
+$uargs = @('-batchmode', '-quit', '-accept-apiupdate', '-projectPath', "`"$Project`"", '-buildTarget', 'Android',
           '-executeMethod', 'PlatypusAndroid.EditorTools.BuildScript.BuildAndroid',
           '-astc', $Astc, '-output', "`"$apk`"", '-logFile', "`"$log`"")
 $proc = Start-Process -FilePath $Unity -ArgumentList $uargs -PassThru -WindowStyle Hidden

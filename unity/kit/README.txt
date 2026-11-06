@@ -1,10 +1,11 @@
-﻿Platypus Reclayed - Android port kit (Unity 2022.3.62f2, IL2CPP ARM64)
-=======================================================================
+﻿Platypus Reclayed - Android port kit (Unity 6 or 2022.3.62f2, IL2CPP ARM64)
+==========================================================================
 
 بالعربي (مختصر)
 ---------------
 المطلوب على الحاسبة (Windows 11):
-  - Unity Hub + Unity 2022.3.62f2 ويا Android Build Support (ومعاه Android SDK & NDK و OpenJDK).
+  - Unity Hub + Unity 6 (6000.0 LTS) ويا Android Build Support (ومعاه Android SDK & NDK و OpenJDK).
+    Unity 6 بالرخصة المجانية يسمح نشيل شعار "Made with Unity". (2022.3.62f2 هم يشتغل بس الشعار يبقى.)
   - نسختك من Platypus Reclayed على Steam (أو أي مجلد بيه Platypus.exe و Platypus_Data).
   - حوالي 25 GB فراغ.
 
@@ -17,27 +18,35 @@
        - يسوي المشروع بـ  %USERPROFILE%\PRA\Project  (تكدر تغيّره بـ -OutDir "D:\PRA").
        - ياخذ عناصر الـ Workshop مالتك تلقائياً إذا موجودة.
   3) شغّل build_android.bat
-       - يلكه Unity 2022.3.62f2 من Unity Hub، أو انطيه مسار Unity.exe.
+       - يلكه Unity 6 من Unity Hub (وإذا ماكو ياخذ 2022.3.62f2)، أو انطيه مسار Unity.exe.
        - أول مرة تاخذ وكت (30-90 دقيقة) لأن يحوّل كل الرسومات لـ ASTC. المرات الجاية أسرع.
        - الناتج:  %USERPROFILE%\PRA\PlatypusReclayed.apk
   4) انقل الـ APK للموبايل ونصّبه. أول تشغيل ينسخ ملفات المودات (~400 MB) مرة وحدة بشريط التحميل مال اللعبة.
+
+تحديث الحزمة على مشروع موجود (بدون تصدير من جديد، ثواني):  setup_project.bat -Update   ثم build_android.bat
+سجل اللعبة على الموبايل: Android/data/com.platypusport.reclayed/files/platypus_log.txt
+  أو حط 4 أصابع على الشاشة ثانيتين وتطلع قائمة مشاركة السجل.
 
 جودة الرسومات بالـ APK:  build_android.bat -Astc 4x4  (أوضح وأكبر)  |  6x6 (الافتراضي)  |  8x8 (أصغر)
 
 English
 -------
-Needs: Windows, Unity Hub + Unity 2022.3.62f2 with Android Build Support (SDK & NDK, OpenJDK), your copy of
-Platypus Reclayed, ~25 GB free.
+Needs: Windows, Unity Hub + Unity 6 (6000.0 LTS; 2022.3.62f2 also works but keeps the Made with Unity splash)
+with Android Build Support (SDK & NDK, OpenJDK), your copy of Platypus Reclayed, ~25 GB free.
 
   setup_project.bat [GameFolder] [-OutDir D:\PRA] [-WorkshopDir ...] [-Force]
       Finds the game (argument, Steam default, every Steam library in libraryfolders.vdf, else a folder picker /
       typed path), exports it with AssetRipper 2.0.0 (downloaded, or tools\AssetRipper_win_x64.zip), copies the
       loose mod files and your Workshop items, removes Steam / Epic / Xbox / Rewired, adds the port and applies
       patches.json. The game folder is only read.
+  setup_project.bat -Update
+      Puts a newer kit into the project you already have (port files + patches only, no export).
   build_android.bat [Unity.exe] [-Astc 4x4|5x5|6x6|8x8]
       Batch-mode Unity build: player settings (IL2CPP ARM64, API 26+, target 34, landscape, GLES3, ASTC), Android
       rebuild of the Platypus Reclayed / Platypus Original bundles, StreamingAssets index, APK.
-      Log: %USERPROFILE%\PRA\build_android.log
+      Prefers Unity 6 (no splash), else 2022.3. Log: %USERPROFILE%\PRA\build_android.log
+On the phone: Android/data/com.platypusport.reclayed/files/platypus_log.txt, or hold four fingers for two seconds
+to share it.
 
 What the port changes
   - Input: Rewired is replaced by a small stand-in (keyboard, any gamepad, touch). In menus the touch screen is the

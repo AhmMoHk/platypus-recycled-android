@@ -16,6 +16,8 @@ for e in P['patches']:
     p = os.path.join(root, e['file'])
     s = open(p, encoding='utf-8-sig').read().replace('\r\n', '\n')
     n = s.count(e['old'])
+    if (e['new'] and e['new'] in s) or (n == 0 and not e['new']):
+        continue                                   # already applied (an updated kit on an existing project)
     if n != e.get('count', 1):
         print(f"PATCH FAILED ({n} matches): {e['file']}: {e['old'][:70]!r}"); bad += 1; continue
     s = s.replace(e['old'], e['new'])
