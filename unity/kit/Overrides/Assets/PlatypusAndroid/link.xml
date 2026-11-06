@@ -1,0 +1,18 @@
+<!-- Platypus Reclayed Android port: keep the game's code whole under IL2CPP. Lua (MoonSharp) and the mod data
+     reach much of it by reflection, which the linker cannot see. -->
+<linker>
+  <assembly fullname="Assembly-CSharp" preserve="all"/>
+  <assembly fullname="Platypus" preserve="all"/>
+  <assembly fullname="Platypus.Core" preserve="all"/>
+  <assembly fullname="MoonSharp" preserve="all"/>
+  <assembly fullname="Blackdrop.Util" preserve="all"/>
+  <assembly fullname="Blackdrop.Platforms" preserve="all"/>
+  <assembly fullname="Blackdrop.BuildInfo" preserve="all"/>
+  <assembly fullname="SimpleJSON" preserve="all"/>
+  <assembly fullname="Tools" preserve="all"/>
+  <assembly fullname="DigitalRuby.AdvancedPolygonCollider" preserve="all"/>
+  <assembly fullname="Rewired_Core" preserve="all"/>
+  <assembly fullname="UnityEngine.UI" preserve="all"/>
+  <assembly fullname="Unity.TextMeshPro" preserve="all"/>
+  <assembly fullname="System.IO.Compression" preserve="all"/>
+</linker>
