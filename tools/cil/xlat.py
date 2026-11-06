@@ -606,6 +606,11 @@ class Xlat:
         if k == 'W':
             return f'$T{ct[1]}'
         if k == 'V':
+            # class generic parameters are erased; the one runtime use (TMP_ObjectPool<T> with T : new()) is only
+            # ever instantiated with List<X> (TMP_ListPool)
+            owner = getattr(getattr(mx, 'm', None), 'owner', None) if mx is not None else None
+            if owner is not None and owner.fullname == 'TMPro.TMP_ObjectPool`1':
+                return 'cs.System.Type.of(cs.System.Collections.Generic.List_1.class)'
             self.ts.warn('runtime use of class generic parameter')
             return 'cs.System.Type.OBJECT'
         if k == 'P':
@@ -669,9 +674,26 @@ class Xlat:
                 if t.name == '<Module>':
                     continue
                 names.append(jclass_name(t.fullname))
+        # static methods carrying platform / startup attributes ("javaClass|csMethod|attributeFullName")
+        attributed = []
+        for m in self.mods:
+            for t in m.types:
+                for md in t.methods:
+                    for ctor, blob in getattr(md, 'attrs', []):
+                        if isinstance(ctor, MethodDef):
+                            an = ctor.owner.fullname
+                        elif isinstance(ctor, MemberRef):
+                            an = self.ts.name_of(ctor.parent)
+                        else:
+                            continue
+                        if an and (an.startswith('Blackdrop.') or an.startswith('UnityEngine.RuntimeInitializeOnLoadMethod')):
+                            attributed.append(f'{jclass_name(t.fullname)}|{md.name}|{an}')
         with open(os.path.join(d, 'GameTypes.java'), 'w') as f:
             f.write('package cs.rt;\n\npublic final class GameTypes {\n    public static final String[] NAMES = {\n')
             for n in names:
+                f.write(f'        "{n}",\n')
+            f.write('    };\n    public static final String[] ATTRIBUTED = {\n')
+            for n in attributed:
                 f.write(f'        "{n}",\n')
             f.write('    };\n}\n')
 

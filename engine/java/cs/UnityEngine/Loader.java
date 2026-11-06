@@ -50,6 +50,7 @@ public final class Loader {
     }
 
     static String readText(File f) {
+        if (!f.isFile() || f.length() > 512L * 1024 * 1024) return null;
         try {
             InputStream in = new FileInputStream(f);
             try {
@@ -372,7 +373,7 @@ public final class Loader {
         String jn = Facades.scriptClass(fullname);
         if (jn.equals("-")) { scriptClasses.put(fullname, null); return null; }
         try {
-            c = Class.forName(jn);
+            c = cs.rt.Rt.cls(jn);
         } catch (ClassNotFoundException e) {
             if (!warned.containsKey(fullname)) {
                 warned.put(fullname, true);
@@ -389,7 +390,7 @@ public final class Loader {
         String[] pk = {"cs.UnityEngine.", "cs.UnityEngine.Rendering.", "cs.UnityEngine.Animations.", "cs.UnityEngine.Video.", "cs.UnityEngine.U2D."};
         for (String p : pk) {
             try {
-                Class<?> k = Class.forName(p + (t.equals("Object") ? "UObject" : t));
+                Class<?> k = cs.rt.Rt.cls(p + (t.equals("Object") ? "UObject" : t));
                 if (UObject.class.isAssignableFrom(k) && !java.lang.reflect.Modifier.isAbstract(k.getModifiers())) { c = k; break; }
             } catch (ClassNotFoundException ignored) {}
         }
@@ -463,24 +464,44 @@ public final class Loader {
     }
 
     // ------------------------------------------------------------------ Resources
-    static UObject resource(String path, cs.System.Type t) {
-        HashMap<String, Object> res = meta().containsKey("resources") ? Json.map(meta.get("resources")) : null;
-        if (res == null) return null;
-        Object pp = res.get(path.toLowerCase());
-        if (pp == null) return null;
-        HashMap<String, Object> m = Json.map(pp);
-        int fid = Json.i(m.get("m_FileID"));
-        long pid = Json.lng(m.get("m_PathID"));
+    /** Resources path (lower case) -> all PPtrs with that path (several assets may share one path) */
+    private static HashMap<String, ArrayList<Object>> resourceMap;
+
+    private static synchronized HashMap<String, ArrayList<Object>> resources() {
+        if (resourceMap != null) return resourceMap;
+        resourceMap = new HashMap<>();
         FileData gg = file("globalgamemanagers");
-        if (gg == null || fid < 1 || fid > gg.externals.size()) return null;
-        FileData f = file((String) gg.externals.get(fid - 1));
-        if (f == null) return null;
-        UObject o = asset(f, pid);
-        if (o != null && t != null && !t.cls.isInstance(o)) {
-            if (o instanceof GameObject && Component.class.isAssignableFrom(t.cls)) return ((GameObject) o).GetComponent(t);
-            return null;
+        if (gg == null) return resourceMap;
+        for (Object o : gg.objects.values()) {
+            HashMap<String, Object> e = Json.map(o);
+            if (!"ResourceManager".equals(e.get("t"))) continue;
+            for (Object pair : l(Json.map(e.get("d")), "m_Container")) {
+                ArrayList<Object> pr = Json.list(pair);
+                String k = ((String) pr.get(0)).toLowerCase();
+                ArrayList<Object> l = resourceMap.get(k);
+                if (l == null) { l = new ArrayList<>(); resourceMap.put(k, l); }
+                l.add(pr.get(1));
+            }
         }
-        return o;
+        return resourceMap;
+    }
+
+    static UObject resource(String path, cs.System.Type t) {
+        ArrayList<Object> refs = resources().get(path.toLowerCase());
+        if (refs == null) return null;
+        Ctx ctx = new Ctx(file("globalgamemanagers"), true);
+        UObject first = null;
+        for (Object pp : refs) {
+            UObject o = ctx.ref(pp);
+            if (o == null) continue;
+            if (t == null || t.cls.isInstance(o)) return o;
+            if (o instanceof GameObject && Component.class.isAssignableFrom(t.cls)) {
+                UObject c = ((GameObject) o).GetComponent(t);
+                if (c != null) return c;
+            }
+            if (first == null) first = o;
+        }
+        return t == null ? first : null;
     }
 
     /** Resources.GetBuiltinResource: built-in font / sprites */

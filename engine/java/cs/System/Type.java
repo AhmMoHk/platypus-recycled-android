@@ -11,7 +11,7 @@ import cs.rt.EnumInfo;
  * System.Type for translated code. A Type wraps the Java class of a translated .NET type (or a primitive),
  * plus element type for arrays and type arguments for generic instantiations.
  */
-public class Type {
+public class Type extends cs.System.Reflection.MemberInfo {
     public final Class<?> cls;          // java class (wrapper class for primitives, enum class for enums)
     public final String csName;         // .NET full name
     public final Class<?> prim;         // java primitive class for primitives / enums (null otherwise)
@@ -225,6 +225,8 @@ public class Type {
         return k < 0 ? null : csName.substring(0, k);
     }
     @Override public String toString() { return csName; }
+    @Override public int get_MemberType() { return 32; }
+    @Override protected Object[] attributes() { return cs.System.Reflection.Assembly.typeAttrs(this); }
     public String ToString() { return csName; }
 
     public boolean get_IsArray() { return elem != null; }
@@ -356,7 +358,7 @@ public class Type {
         String prefix = cls.getName() + "$";
         for (String n : cs.rt.GameTypes.NAMES) {
             if (n.startsWith(prefix) && n.indexOf('$', prefix.length()) < 0) {
-                try { out.add(of(Class.forName(n))); } catch (ClassNotFoundException ignored) {}
+                try { out.add(of(cs.rt.Rt.cls(n))); } catch (ClassNotFoundException ignored) {}
             }
         }
         return out.toArray(new Type[0]);
@@ -409,7 +411,7 @@ public class Type {
         String n = cls.getName();
         int k = n.lastIndexOf('$');
         if (k < 0 || !n.startsWith("cs.")) return null;
-        try { return of(Class.forName(n.substring(0, k))); } catch (ClassNotFoundException e) { return null; }
+        try { return of(cs.rt.Rt.cls(n.substring(0, k))); } catch (ClassNotFoundException e) { return null; }
     }
 
     /** .NET name of a type for resolution from metadata strings ("System.Int32", "Foo", "List`1<...>"). */

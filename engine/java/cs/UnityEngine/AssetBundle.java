@@ -50,34 +50,41 @@ public class AssetBundle extends UObject {
         return b;
     }
 
-    private Object find(String name) {
+    /** all PPtrs registered under an asset name (full path or file name without extension) */
+    private ArrayList<Object> find(String name) {
         String n = name.toLowerCase();
-        Object pp = container.get(n);
-        if (pp != null) return pp;
+        ArrayList<Object> r = new ArrayList<>();
         for (java.util.Map.Entry<String, Object> e : container.entrySet()) {
             String k = e.getKey();
             String base = k.substring(k.lastIndexOf('/') + 1);
             int dot = base.lastIndexOf('.');
             if (dot > 0) base = base.substring(0, dot);
-            if (base.equals(n)) return e.getValue();
+            if (!k.equals(n) && !base.equals(n)) continue;
+            Object v = e.getValue();
+            ArrayList<Object> l = Json.list(v);
+            if (!l.isEmpty() && l.get(0) instanceof ArrayList) r.addAll(l);
+            else r.add(v);
         }
-        return null;
+        return r;
     }
 
     public UObject LoadAsset(String name) { return LoadAsset(name, cs.System.Type.of(UObject.class)); }
     public UObject LoadAsset(String name, cs.System.Type t) {
-        Object pp = find(name);
-        if (pp == null) return null;
-        ArrayList<Object> l = Json.list(pp);
-        Loader.FileData fd = Loader.file((String) l.get(0));
-        if (fd == null) return null;
-        UObject o = Loader.asset(fd, Json.lng(l.get(1)));
-        if (o == null) return null;
-        if (t != null && !t.cls.isInstance(o)) {
-            if (o instanceof GameObject && Component.class.isAssignableFrom(t.cls)) return ((GameObject) o).GetComponent(t);
-            return null;
+        UObject first = null;
+        for (Object pp : find(name)) {
+            ArrayList<Object> l = Json.list(pp);
+            Loader.FileData fd = Loader.file((String) l.get(0));
+            if (fd == null) continue;
+            UObject o = Loader.asset(fd, Json.lng(l.get(1)));
+            if (o == null) continue;
+            if (t == null || t.cls.isInstance(o)) return o;
+            if (o instanceof GameObject && Component.class.isAssignableFrom(t.cls)) {
+                UObject c = ((GameObject) o).GetComponent(t);
+                if (c != null) return c;
+            }
+            if (first == null) first = o;
         }
-        return o;
+        return t == null || t.cls == UObject.class ? first : null;
     }
     public Object LoadAsset(cs.System.Type g, String name) { return LoadAsset(name, g); }
     public AssetBundleRequest LoadAssetAsync(String name, cs.System.Type t) {
@@ -88,7 +95,7 @@ public class AssetBundle extends UObject {
     }
     public AssetBundleRequest LoadAssetAsync(cs.System.Type g, String name) { return LoadAssetAsync(name, g); }
     public AssetBundleRequest LoadAssetAsync(String name) { return LoadAssetAsync(name, cs.System.Type.of(UObject.class)); }
-    public boolean Contains(String name) { return find(name) != null; }
+    public boolean Contains(String name) { return !find(name).isEmpty(); }
     public String[] GetAllAssetNames() { return container.keySet().toArray(new String[0]); }
     public boolean get_isStreamedSceneAssetBundle() { return false; }
 

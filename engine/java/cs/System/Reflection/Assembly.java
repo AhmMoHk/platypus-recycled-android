@@ -21,7 +21,7 @@ public class Assembly {
             ArrayList<cs.System.Type> out = new ArrayList<>();
             for (String n : cs.rt.GameTypes.NAMES) {
                 try {
-                    out.add(cs.System.Type.of(Class.forName(n)));
+                    out.add(cs.System.Type.of(cs.rt.Rt.cls(n)));
                 } catch (ClassNotFoundException | LinkageError ignored) {
                 }
             }
@@ -141,7 +141,7 @@ public class Assembly {
 
     private static Class<?> load(String n) {
         try {
-            return Class.forName(javaName(n));
+            return cs.rt.Rt.cls(javaName(n));
         } catch (ClassNotFoundException | LinkageError e) {
             return null;
         }

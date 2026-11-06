@@ -67,6 +67,7 @@ public class Shader extends UObject {
     public static boolean IsKeywordEnabled(String k) { return globalKeywords.contains(k); }
     static final java.util.HashSet<String> globalKeywords = new java.util.HashSet<>();
     public static void WarmupAllShaders() {}
+    public static MaterialPropertyBlock $globals() { return globals; }
 
     @Override public void $loadAsset(HashMap<String, Object> d, Loader.Ctx ctx) {
         Object n = d.get("m_Name");

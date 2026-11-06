@@ -101,7 +101,10 @@ public final class Eng {
         s.roots.clear();
         s.loaded = false;
         scenes.remove(s);
-        if (active == s) active = null;
+        if (active == s) {
+            active = null;
+            for (SceneData o : scenes) if (o.loaded) { active = o; break; }
+        }
     }
 
     static void registerNewRoot(GameObject go) {

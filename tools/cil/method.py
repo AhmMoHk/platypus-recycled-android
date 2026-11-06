@@ -7,6 +7,13 @@ from .jtypes import *
 from . import xlat as X
 
 
+
+# interfaces .NET arrays implement: a value of static type Object may be an array here
+ARRAY_IFACES = {'cs.System.Collections.Generic.IEnumerable_1', 'cs.System.Collections.Generic.ICollection_1',
+                'cs.System.Collections.Generic.IList_1', 'cs.System.Collections.Generic.IReadOnlyList_1',
+                'cs.System.Collections.Generic.IReadOnlyCollection_1', 'cs.System.Collections.IEnumerable',
+                'cs.System.Collections.ICollection', 'cs.System.Collections.IList'}
+
 class Block:
     __slots__ = ('start', 'end', 'ins', 'region', 'entry', 'lines', 'term', 'succ', 'idx', 'reached')
 
@@ -188,6 +195,8 @@ class MethodX:
             return v.e
         if to_jt.endswith('[]') and not f.endswith('[]') and f != 'Object':
             return f'(({to_jt}) (Object) ({v.e}))'
+        if (f == 'Object' or f.endswith('[]')) and to_jt in ARRAY_IFACES:
+            return f'(({to_jt}) cs.rt.Rt.iface({v.e}))'
         if f == 'Object' or to_jt.endswith('[]'):
             return f'(({to_jt}) {v.e})' if self.simple(v.e) else f'(({to_jt}) ({v.e}))'
         return f'(({to_jt}) (Object) ({v.e}))'
@@ -222,6 +231,8 @@ class MethodX:
             return e
         if k == 'array':
             return f'(({j}) cs.rt.Rt.castArray({e}, {self.x.type_expr(ct[1], self)}))'
+        if j in ARRAY_IFACES:
+            return f'(({j}) cs.rt.Rt.iface({e}))'
         return f'(({j}) ({e}))'
 
     # ------------------------------------------------------------------ translation driver

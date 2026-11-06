@@ -151,7 +151,7 @@ def arg_for_param(self, v, pd, pa, jp, pre, post):
             return v.lv.read() if v.lv.kind != 'struct' else v.lv.e
         return v.e if v.jt != 'null' else '(Object) null'
     if v.jt.endswith('[]') and not jp.endswith('[]') and jp not in JPRIMS:
-        return f'cs.rt.Rt.asList({v.e})'
+        return f'(({jp}) cs.rt.Rt.iface({v.e}))'
     if v.ftn is not None or v.token is not None:
         self.err('function pointer / token as argument')
     if v.lv is not None and v.lv.kind == 'struct':

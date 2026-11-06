@@ -24,30 +24,10 @@ public abstract class Host {
     public String clipboard() { return ""; }
     public void setClipboard(String s) {}
     public boolean isMobile() { return false; }
-    /** decode an image file (PNG/JPG) to {width, height, argb pixels top-down}; null on failure */
-    public Object[] decodeImage(byte[] data) {
-        try {
-            java.awt.image.BufferedImage im = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(data));
-            if (im == null) return null;
-            int w = im.getWidth(), h = im.getHeight();
-            int[] px = im.getRGB(0, 0, w, h, null, 0, w);
-            return new Object[]{w, h, px};
-        } catch (Throwable e) {
-            return null;
-        }
-    }
-    /** encode argb pixels (top-down) as PNG */
-    public byte[] encodePNG(int w, int h, int[] argb) {
-        try {
-            java.awt.image.BufferedImage im = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
-            im.setRGB(0, 0, w, h, argb, 0, w);
-            java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
-            javax.imageio.ImageIO.write(im, "png", bo);
-            return bo.toByteArray();
-        } catch (Throwable e) {
-            return new byte[0];
-        }
-    }
+    /** decode an image file (PNG/JPG) to {width, height, argb pixels top-down}; null on failure (hosts override) */
+    public Object[] decodeImage(byte[] data) { return null; }
+    /** encode argb pixels (top-down) as PNG (hosts override) */
+    public byte[] encodePNG(int w, int h, int[] argb) { return new byte[0]; }
     /** decode compressed audio (OGG Vorbis etc.) to {channels, sampleRate, short[] interleaved pcm}; null if unsupported */
     public Object[] decodeAudio(byte[] data) { return null; }
     /** output sample rate of the audio device */

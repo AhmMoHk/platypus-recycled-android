@@ -34,7 +34,7 @@ public class Player$ControllerHelper extends cs.Rewired.Utils.Classes.CodeHelper
         if (removed != null) removed.DynamicInvoke(new Object[]{new ControllerAssignmentChangedEventArgs(player, c)});
     }
     public void ClearAllControllers() {
-        for (Object c : controllers.ToArray()) RemoveController((Controller) c);
+        for (Object c : (Object[]) controllers.ToArray()) RemoveController((Controller) c);
     }
     public void add_ControllerAddedEvent(cs.System.Action_1 a) { added = cs.System.Delegate.Combine(added, a); }
     public void remove_ControllerAddedEvent(cs.System.Action_1 a) { added = cs.System.Delegate.Remove(added, a); }

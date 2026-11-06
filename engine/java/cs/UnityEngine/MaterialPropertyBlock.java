@@ -57,4 +57,5 @@ public class MaterialPropertyBlock {
     public float $float(int i, float def) { Float f = floats.get(i); return f == null ? def : f; }
     public float[] $vector(int i) { return vectors.get(i); }
     public Texture $texture(int i) { return textures.get(i); }
+    public float[] $texST(int i) { return texST.get(i); }
 }

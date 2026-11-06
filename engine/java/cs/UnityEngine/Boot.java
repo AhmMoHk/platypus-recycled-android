@@ -34,7 +34,7 @@ public final class Boot {
             String full = (ns == null || ns.isEmpty() ? "" : ns + ".") + cn;
             Class<?> c;
             try {
-                c = Class.forName(cs.System.Reflection.Assembly.javaName(full));
+                c = cs.rt.Rt.cls(cs.System.Reflection.Assembly.javaName(full));
             } catch (ClassNotFoundException e) {
                 continue;   // Rewired / Blackdrop internals replaced by facades
             }
@@ -56,28 +56,17 @@ public final class Boot {
         }
     }
 
-    /** invoke static parameterless methods carrying an attribute of class `attr` */
+    /** invoke static parameterless methods carrying an attribute of class `attr` (index written by the translator) */
     public static void invokeAttributed(Class<?> attr) {
-        for (String n : cs.rt.GameTypes.NAMES) {
+        String an = cs.System.Type.csNameOf(attr);
+        for (String e : cs.rt.GameTypes.ATTRIBUTED) {
+            String[] p = e.split("\\|");
+            if (!p[2].equals(an)) continue;
             Class<?> c;
-            try { c = Class.forName(n); } catch (ClassNotFoundException e) { continue; }
-            Object[] a;
-            try {
-                java.lang.reflect.Method cm = c.getDeclaredMethod("$cattrs");
-                a = (Object[]) cm.invoke(null);
-            } catch (NoSuchMethodException e) {
-                continue;
-            } catch (ReflectiveOperationException e) {
-                continue;
-            }
-            for (int i = 0; i + 1 < a.length; i += 2) {
-                String k = (String) a[i];
-                if (attr.isInstance(a[i + 1]) && k.startsWith("M:")) {
-                    try {
-                        java.lang.reflect.Method m = c.getDeclaredMethod(k.substring(2));
-                        if (java.lang.reflect.Modifier.isStatic(m.getModifiers())) invokeStatic(c, k.substring(2));
-                    } catch (NoSuchMethodException ignored) {}
-                }
+            try { c = cs.rt.Rt.cls(p[0]); } catch (ClassNotFoundException ex) { continue; }
+            for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+                if (!java.lang.reflect.Modifier.isStatic(m.getModifiers()) || m.getParameterTypes().length != 0) continue;
+                if (m.getName().equals(p[1]) || m.getName().startsWith(p[1] + "$")) { invokeStatic(c, m.getName()); break; }
             }
         }
     }

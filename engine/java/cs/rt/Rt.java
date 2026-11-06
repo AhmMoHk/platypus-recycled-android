@@ -17,6 +17,7 @@ public final class Rt {
     }
 
     public static int unboxI(Object o) {
+        if (o == null) return 0;
         if (o instanceof Integer) return (Integer) o;
         if (o instanceof BoxedEnum) return (int) ((BoxedEnum) o).value;
         if (o instanceof Number) return ((Number) o).intValue();
@@ -26,6 +27,7 @@ public final class Rt {
     }
 
     public static long unboxJ(Object o) {
+        if (o == null) return 0L;
         if (o instanceof Long) return (Long) o;
         if (o instanceof BoxedEnum) return ((BoxedEnum) o).value;
         if (o instanceof Number) return ((Number) o).longValue();
@@ -34,30 +36,35 @@ public final class Rt {
     }
 
     public static float unboxF(Object o) {
+        if (o == null) return 0f;
         if (o instanceof Float) return (Float) o;
         if (o instanceof Number) return ((Number) o).floatValue();
         throw badUnbox(o, "float");
     }
 
     public static double unboxD(Object o) {
+        if (o == null) return 0.0;
         if (o instanceof Double) return (Double) o;
         if (o instanceof Number) return ((Number) o).doubleValue();
         throw badUnbox(o, "double");
     }
 
     public static boolean unboxZ(Object o) {
+        if (o == null) return false;
         if (o instanceof Boolean) return (Boolean) o;
         if (o instanceof Number) return ((Number) o).intValue() != 0;
         throw badUnbox(o, "bool");
     }
 
     public static char unboxC(Object o) {
+        if (o == null) return '\0';
         if (o instanceof Character) return (Character) o;
         if (o instanceof Number) return (char) ((Number) o).intValue();
         throw badUnbox(o, "char");
     }
 
     public static byte unboxB(Object o) {
+        if (o == null) return (byte) 0;
         if (o instanceof Byte) return (Byte) o;
         if (o instanceof BoxedEnum) return (byte) ((BoxedEnum) o).value;
         if (o instanceof Number) return ((Number) o).byteValue();
@@ -65,6 +72,7 @@ public final class Rt {
     }
 
     public static short unboxS(Object o) {
+        if (o == null) return (short) 0;
         if (o instanceof Short) return (Short) o;
         if (o instanceof BoxedEnum) return (short) ((BoxedEnum) o).value;
         if (o instanceof Number) return ((Number) o).shortValue();
@@ -161,6 +169,23 @@ public final class Rt {
 
     /** RuntimeHelpers.InitializeArray: little-endian element data. */
     public static void initArray(Object arr, byte[] d) {
+        if (arr instanceof MDArray) {
+            MDArray m = (MDArray) arr;
+            Object z = m.data.length > 0 ? m.data[0] : null;
+            java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(d).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            for (int i = 0; i < m.data.length; i++) {
+                if (z instanceof Integer) m.data[i] = bb.getInt(i * 4);
+                else if (z instanceof Float) m.data[i] = bb.getFloat(i * 4);
+                else if (z instanceof Long) m.data[i] = bb.getLong(i * 8);
+                else if (z instanceof Double) m.data[i] = bb.getDouble(i * 8);
+                else if (z instanceof Short) m.data[i] = bb.getShort(i * 2);
+                else if (z instanceof Character) m.data[i] = bb.getChar(i * 2);
+                else if (z instanceof Byte) m.data[i] = d[i];
+                else if (z instanceof Boolean) m.data[i] = d[i] != 0;
+                else throw todo("InitializeArray MDArray of " + z);
+            }
+            return;
+        }
         if (arr instanceof byte[]) {
             byte[] a = (byte[]) arr;
             System.arraycopy(d, 0, a, 0, Math.min(a.length, d.length));
@@ -214,6 +239,18 @@ public final class Rt {
             else Array.set(out, i, v);
         }
         return out;
+    }
+
+    /** load a class without running its static initializer (.NET reflection does not run type initializers) */
+    public static Class<?> cls(String name) throws ClassNotFoundException {
+        return Class.forName(name, false, Rt.class.getClassLoader());
+    }
+
+    /** A value used as IEnumerable / IList: arrays become a live list view, anything else passes through. */
+    public static Object iface(Object o) {
+        if (o == null || !o.getClass().isArray()) return o;
+        if (o instanceof Object[]) return cs.System.Collections.Generic.List_1.$view((Object[]) o);
+        return asList(o);
     }
 
     /** An array passed where an IEnumerable / IList is expected. */

@@ -4,6 +4,13 @@ import java.util.Arrays;
 
 /** System.Collections.Generic.List<T> (elements stored boxed / by reference). */
 public class List_1 implements IList_1, IReadOnlyList_1, cs.System.Collections.IList {
+    /** a list backed by an existing array (an array seen as IList<T>) */
+    public static List_1 $view(Object[] a) {
+        List_1 l = new List_1();
+        l.items = a;
+        l.size = a.length;
+        return l;
+    }
     Object[] items;
     int size;
     int version;

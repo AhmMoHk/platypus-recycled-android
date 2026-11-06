@@ -65,8 +65,24 @@ and the startup sequence (`RuntimeInitializeOnLoad` phases).
 * game data is converted once on the phone from your own copy (GPU texture formats + Vorbis), so the APK
   stays small
 
+## Android shell (`android/`)
+
+* `MainActivity` — GL surface, frame loop with the selected frame cap (60/90/120/144), audio thread
+  (Java mixer → `AudioTrack`), immersive fullscreen including the display cutout, multi-touch routing
+* `GlesGfx` — GLES2 renderer: one program per game shader family (sprite with fog/emission/day-cycle/blink,
+  UI, TextMeshPro SDF with outline/underlay, morph-text tints, multi-tint), stencil masks, RectMask2D scissor,
+  ASTC textures uploaded straight from disk
+* `TouchControls` — clay joystick (red/yellow base, blue knob at 47.5% of the base that follows the thumb 360°,
+  clamped, snaps back) and the hold-to-fire button (scales to 0.92 while held); each control tracks its own pointer id
+* `Settings` — frame rate, HighEnd (4K) bundles, 100% unlocked progression (through the game's own save API)
+* `DataImport` — one-time copy of the converted data folder with the system folder picker
+
 ## Building
 
-Needs your own install of the game. `tools/xlat.sh` translates the assemblies into `gen/java`,
-`tools/export/export_unity.py` exports the Unity data, then the Android shell packages engine + translated
-code + converted data.
+1. Translate the game's assemblies from your install: `tools/xlat.sh` → `gen/java`, `gen/stubs`
+2. Build the APK: `android/build.sh` → `build/PlatypusRecycled.apk` (javac + dx + aapt + apksigner; min Android 7.0)
+3. Make the data pack from your own copy (PC, Python 3 + UnityPy + astcenc + ffmpeg):
+   `python3 tools/export/convert_assets.py "<game>/Platypus_Data" out --workshop "<steam>/steamapps/workshop/content/<appid>"`
+4. Install the APK, start it, pick the `out` folder when asked.
+
+`desktop/run.sh [frames]` runs the translated game headless on a PC for testing the engine.

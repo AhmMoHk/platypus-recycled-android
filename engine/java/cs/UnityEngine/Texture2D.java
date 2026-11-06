@@ -14,6 +14,8 @@ public class Texture2D extends Texture {
     /** GPU-compressed data per mip (converter output) and its format */
     public byte[][] $compressed;
     public int $compressedFormat;
+    /** compressed blob on disk (path relative to the data root), loaded when first drawn */
+    public String $compressedSrc;
     /** optional alpha mask (8 bit, row 0 = bottom) for pixel queries on compressed textures */
     public byte[] $alpha;
     public String $alphaSrc;
@@ -229,6 +231,7 @@ public class Texture2D extends Texture {
         Texture2D t = new Texture2D();
         t.width = width; t.height = height; t.format = format; t.filterMode = filterMode; t.wrapModeU = wrapModeU; t.wrapModeV = wrapModeV;
         t.mipCount = mipCount; t.readable = readable; t.$src = $src; t.$compressed = $compressed; t.$compressedFormat = $compressedFormat;
+        t.$compressedSrc = $compressedSrc;
         t.$alpha = $alpha; t.$alphaSrc = $alphaSrc;
         if (px != null) t.px = px.clone();
         return t;
@@ -244,8 +247,13 @@ public class Texture2D extends Texture {
         filterMode = Loader.i(ts, "m_FilterMode", 1);
         wrapModeU = Loader.i(ts, "m_WrapU", 1);
         wrapModeV = Loader.i(ts, "m_WrapV", 1);
-        Object png = d.get("_png");
-        if (png instanceof String && width > 0 && height > 0) $src = "unity/" + png;
+        Object png = d.get("_png"), astc = d.get("_astc"), alpha = d.get("_alpha"), src = d.get("_src");
+        if (alpha instanceof String) $alphaSrc = (String) alpha;
+        if (astc instanceof String) {
+            $compressedSrc = (String) astc;
+            $compressedFormat = d.containsKey("_astcFormat") ? (int) cs.rt.Json.lng(d.get("_astcFormat")) : 0x93B0;
+        } else if (src instanceof String) $src = (String) src;
+        else if (png instanceof String && width > 0 && height > 0) $src = "unity/" + png;
         else if (width > 0 && height > 0) px = new int[width * height];
     }
 }
