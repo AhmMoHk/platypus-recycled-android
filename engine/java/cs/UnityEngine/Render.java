@@ -224,6 +224,7 @@ public final class Render {
         if (s == null || s.verts == null) return;
         Gfx.Item it = item(vp, model, m, r.block);
         it.world = true;
+        it.src = r;
         Texture t = r.block != null ? r.block.$texture(MAIN_TEX) : null;
         it.tex = t != null ? t : s.texture;
         it.tint[0] = r.color.r; it.tint[1] = r.color.g; it.tint[2] = r.color.b; it.tint[3] = r.color.a;

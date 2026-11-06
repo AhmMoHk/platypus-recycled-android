@@ -511,7 +511,7 @@ public final class GlesGfx extends Gfx {
         if (t instanceof Texture2D) {
             Texture2D t2 = (Texture2D) t;
             if (t2.$compressed == null && t2.$compressedSrc != null && !t2.$hasPixels()) {
-                byte[] b = cs.UnityEngine.Host.get().readData(t2.$compressedSrc);
+                byte[] b = t2.$readCompressed();
                 if (b != null) {
                     ByteBuffer bb = ByteBuffer.allocateDirect(b.length).order(ByteOrder.nativeOrder());
                     bb.put(b).position(0);
@@ -531,6 +531,8 @@ public final class GlesGfx extends Gfx {
                 return;
             }
             int[] px = t2.$pixels();
+            tw = t2.get_width();
+            th = t2.get_height();
             ByteBuffer bb = ByteBuffer.allocateDirect(Math.max(4, px.length * 4)).order(ByteOrder.nativeOrder());
             for (int i = 0; i < px.length; i++) {
                 int c = px[i];
@@ -538,6 +540,8 @@ public final class GlesGfx extends Gfx {
             }
             bb.position(0);
             GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, Math.max(1, tw), Math.max(1, th), 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, bb);
+            t2.$cpuDirty = false;
+            t2.$dropPixels();      // keep the Java heap small: pixels are re-decoded from the source if read again
             return;
         }
         ByteBuffer bb = ByteBuffer.allocateDirect(Math.max(4, tw * th * 4)).order(ByteOrder.nativeOrder());

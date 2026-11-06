@@ -8,7 +8,7 @@ Output (copy the whole <out dir> to the phone with the in-app "Choose folder" im
     unity/...                      scenes, prefabs, UI, fonts, settings (export_unity.py)
     StreamingAssets/<mod>/...      mod data (json, .plat, lua, loose GFX/SFX) copied as-is
     StreamingAssets/<mod>/Bundle/HighEnd/<bundle>        JSON marker read by the engine's AssetBundle
-    StreamingAssets/<mod>/Bundle/HighEnd/<bundle>.d/     files/<cab>.json, tex/<pid>.astc (+ .a8z alpha), snd/<pid>.ogg
+    StreamingAssets/<mod>/Bundle/HighEnd/<bundle>.d/     files/<cab>.json, tex/<pid>.astcz (deflated ASTC blocks, + .a8z alpha), snd/<pid>.ogg
     Workshop/<id>/...              Steam Workshop items (if --workshop DIR is given): listed as normal mods
 
 Textures: the HighEnd (4K) RGBA32 bundle textures are encoded to ASTC 4x4 (8 bits/pixel, -thorough), which keeps
@@ -83,7 +83,130 @@ def norm_name(n):
     return n.split('/')[-1]
 
 
+
+# ---------------------------------------------------------------- streaming bundle extraction (low memory)
+def _cstr(f):
+    b = bytearray()
+    while True:
+        c = f.read(1)
+        if not c or c == b'\0':
+            return b.decode('utf-8', 'replace')
+        b += c
+
+
+def extract_bundle_nodes(path, outdir):
+    """Decompress a UnityFS bundle block by block into its node files (CAB, CAB.resS, ...) on disk.
+    Returns {node name: file path}. Peak memory is one block (UnityPy would hold the whole bundle twice)."""
+    import struct
+    from UnityPy.helpers import CompressionHelper as C
+    os.makedirs(outdir, exist_ok=True)
+    with open(path, 'rb') as f:
+        sig = _cstr(f)
+        if sig != 'UnityFS':
+            raise ValueError('not a UnityFS bundle: ' + sig)
+        ver = struct.unpack('>I', f.read(4))[0]
+        _cstr(f); _cstr(f)
+        size, csize, usize, flags = struct.unpack('>qIII', f.read(20))
+        if ver >= 7:
+            f.seek((f.tell() + 15) & ~15)
+        if flags & 0x80:
+            here = f.tell()
+            f.seek(size - csize)
+            info = f.read(csize)
+            f.seek(here)
+        else:
+            info = f.read(csize)
+        comp = flags & 0x3F
+        info = decompress(C, info, usize, comp)
+        o = 16
+        nblocks = struct.unpack_from('>i', info, o)[0]; o += 4
+        blocks = []
+        for _ in range(nblocks):
+            u, c, bf = struct.unpack_from('>IIH', info, o); o += 10
+            blocks.append((u, c, bf))
+        nnodes = struct.unpack_from('>i', info, o)[0]; o += 4
+        nodes = []
+        for _ in range(nnodes):
+            off, sz, nf = struct.unpack_from('>qqI', info, o); o += 20
+            e = info.index(b'\0', o)
+            nodes.append((off, sz, info[o:e].decode()))
+            o = e + 1
+        if flags & 0x200:
+            f.seek((f.tell() + 15) & ~15)
+        stream = os.path.join(outdir, '_stream.bin')
+        with open(stream, 'wb') as out:
+            for u, c, bf in blocks:
+                out.write(decompress(C, f.read(c), u, bf & 0x3F))
+    res = {}
+    with open(stream, 'rb') as src:
+        for off, sz, name in nodes:
+            dst = os.path.join(outdir, os.path.basename(name))
+            src.seek(off)
+            with open(dst, 'wb') as out:
+                left = sz
+                while left > 0:
+                    chunk = src.read(min(left, 64 << 20))
+                    out.write(chunk)
+                    left -= len(chunk)
+            res[os.path.basename(name)] = dst
+    os.remove(stream)
+    return res
+
+
+def decompress(C, data, usize, comp):
+    if comp == 0:
+        return data
+    if comp in (2, 3):
+        import lz4.block
+        return lz4.block.decompress(data, uncompressed_size=usize)
+    if comp == 1:
+        return C.decompress_lzma(data)
+    raise ValueError(f'unsupported compression {comp}')
+
+
+def read_node(nodes, source, offset, size):
+    """bytes of a resource stream reference ('archive:/CAB-x/CAB-x.resS')"""
+    p = nodes.get(os.path.basename(source))
+    if p is None:
+        return None
+    with open(p, 'rb') as f:
+        f.seek(offset)
+        return f.read(size)
+
+
+def raw_texture_image(d, nodes):
+    """Unity RGBA32/ARGB32/RGB24/Alpha8 texture from its stream data, row 0 = bottom (Unity order)"""
+    from PIL import Image
+    sd = d.get('m_StreamData') or {}
+    w, h, fmt = d['m_Width'], d['m_Height'], d['m_TextureFormat']
+    raw = read_node(nodes, sd.get('path', ''), sd.get('offset', 0), sd.get('size', 0)) if sd.get('size') else None
+    if raw is None:
+        return None
+    if fmt == 4:
+        return Image.frombytes('RGBA', (w, h), raw[:w * h * 4])
+    if fmt == 5:
+        a, r, g, b = Image.frombytes('RGBA', (w, h), raw[:w * h * 4]).split()
+        return Image.merge('RGBA', (r, g, b, a))
+    if fmt == 3:
+        return Image.frombytes('RGB', (w, h), raw[:w * h * 3]).convert('RGBA')
+    if fmt == 1:
+        a = Image.frombytes('L', (w, h), raw[:w * h])
+        return Image.merge('RGBA', (Image.new('L', (w, h), 255),) * 3 + (a,))
+    import texture2ddecoder
+    if fmt == 12:
+        return Image.frombytes('RGBA', (w, h), texture2ddecoder.decode_bc3(raw, w, h), 'raw', 'BGRA')
+    if fmt == 10:
+        return Image.frombytes('RGBA', (w, h), texture2ddecoder.decode_bc1(raw, w, h), 'raw', 'BGRA')
+    raise ValueError(f'texture format {fmt} not supported')
+
 # ---------------------------------------------------------------- textures
+def texture_settings(tx):
+    ts = getattr(tx, 'm_TextureSettings', None)
+    if ts is None:
+        return {}
+    return {k: getattr(ts, k) for k in ('m_FilterMode', 'm_Aniso', 'm_MipBias', 'm_WrapU', 'm_WrapV', 'm_WrapW') if hasattr(ts, k)}
+
+
 def encode_texture(args):
     """(png_path, astc_path, astcenc, quality) -> error or None"""
     png, astc, enc, quality = args
@@ -91,11 +214,13 @@ def encode_texture(args):
         r = subprocess.run([enc, '-cl', png, astc, '4x4', '-' + quality, '-silent'], capture_output=True, timeout=3600)
         if r.returncode != 0:
             return f'astcenc failed for {png}: {r.stderr.decode(errors="replace")[:300]}'
-        # strip the 16 byte .astc header: the engine uploads raw blocks
+        # strip the 16 byte .astc header (the engine uploads raw blocks) and deflate them:
+        # lossless, ~5x smaller on disk, inflated once at GPU upload
         with open(astc, 'rb') as f:
             data = f.read()
-        with open(astc, 'wb') as f:
-            f.write(data[16:])
+        os.remove(astc)
+        with open(astc + 'z', 'wb') as f:
+            f.write(zlib.compress(data[16:], 9))
         return None
     finally:
         try:
@@ -108,15 +233,20 @@ def convert_bundle(path, out_marker, rel_base, gen, astcenc, quality, jobs, log)
     """convert one AssetBundle file; out_marker is the marker path written at the bundle's place"""
     import UnityPy
     from PIL import Image
-    env = UnityPy.load(path)
     name = os.path.basename(out_marker)
     ddir = out_marker + '.d'
     for sub in ('files', 'tex', 'snd'):
         os.makedirs(os.path.join(ddir, sub), exist_ok=True)
     rel_d = rel_base + '/' + name + '.d'
+    work = tempfile.mkdtemp(prefix='prr-bundle-')
+    nodes = extract_bundle_nodes(path, work)
+    cabs = [p for n, p in nodes.items() if not (n.endswith('.resS') or n.endswith('.resource'))]
+    env = UnityPy.load(*cabs)
     files = []
     tex_jobs = []
     tmp = tempfile.mkdtemp(prefix='prr-tex-')
+    pool = cf.ThreadPoolExecutor(max_workers=jobs)
+    futures = []
     def serialized(files):
         for fname, f in list(files.items()):
             if hasattr(f, 'objects'):
@@ -139,44 +269,64 @@ def convert_bundle(path, out_marker, rel_base, gen, astcenc, quality, jobs, log)
                     try:
                         sc = base.m_Script.read()
                         asm, full = sc.m_AssemblyName, (sc.m_Namespace + '.' if sc.m_Namespace else '') + sc.m_ClassName
-                        d = o.read_typetree(nodes=gen.get_nodes_up(asm, full), check_read=False)
+                        try:        # bundles carry their own type trees; the generated one is the fallback
+                            d = o.read_typetree()
+                        except Exception:
+                            d = o.read_typetree(nodes=gen.get_nodes_up(asm, full), check_read=False)
                     except Exception as e:
                         d, asm, full = {'_error': repr(e)[:200]}, None, None
                     d = clean(d, sf, norm_name)
                     d['_script'] = full
                     d['_asm'] = asm
                 elif t == 'Texture2D':
-                    tx = o.read()
-                    d = {'m_Name': tx.m_Name, 'm_Width': tx.m_Width, 'm_Height': tx.m_Height, 'm_TextureFormat': 4,
-                         'm_MipCount': 1, 'm_IsReadable': bool(getattr(tx, 'm_IsReadable', False)),
-                         'm_TextureSettings': clean(o.read_typetree().get('m_TextureSettings', {}), sf, norm_name)}
-                    if tx.m_Width > 0 and tx.m_Height > 0:
-                        img = tx.image.convert('RGBA').transpose(Image.FLIP_TOP_BOTTOM)   # GL row 0 = bottom
+                    tt = o.read_typetree()
+                    tt.pop('image data', None)
+                    d = {'m_Name': tt.get('m_Name'), 'm_Width': tt['m_Width'], 'm_Height': tt['m_Height'], 'm_TextureFormat': 4,
+                         'm_MipCount': 1, 'm_IsReadable': bool(tt.get('m_IsReadable', False)),
+                         'm_TextureSettings': clean(tt.get('m_TextureSettings', {}), sf, norm_name)}
+                    if tt['m_Width'] > 0 and tt['m_Height'] > 0:
+                        img = raw_texture_image(tt, nodes)
+                        if img is None:
+                            img = o.read().image.convert('RGBA').transpose(Image.FLIP_TOP_BOTTOM)
                         png = os.path.join(tmp, f'{pid}.png')
-                        img.save(png, compress_level=1)
-                        tex_jobs.append((png, os.path.join(ddir, 'tex', f'{pid}.astc'), astcenc, quality))
-                        d['_astc'] = f'{rel_d}/tex/{pid}.astc'
+                        img.save(png, compress_level=1)       # PNG top row = Unity bottom row = GL row 0
+                        job = (png, os.path.join(ddir, 'tex', f'{pid}.astc'), astcenc, quality)
+                        tex_jobs.append(job)
+                        futures.append(pool.submit(encode_texture, job))
+                        d['_astc'] = f'{rel_d}/tex/{pid}.astcz'
                         d['_astcFormat'] = 0x93B0
                         alpha = img.getchannel('A').tobytes()
                         with open(os.path.join(ddir, 'tex', f'{pid}.a8z'), 'wb') as f:
                             f.write(zlib.compress(alpha, 6))
                         d['_alpha'] = f'{rel_d}/tex/{pid}.a8z'
+                        del img, alpha
+                    del tt
                 elif t == 'AudioClip':
-                    ac = o.read()
-                    d = clean(o.read_typetree(), sf, norm_name)
+                    tt = o.read_typetree()
+                    d = clean(tt, sf, norm_name)
                     d.pop('m_Resource', None)
                     try:
-                        samples = ac.samples
-                        wav = next(iter(samples.values()))
-                        ogg = os.path.join(ddir, 'snd', f'{pid}.ogg')
-                        r = subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'wav', '-i', 'pipe:0', '-c:a', 'libvorbis', '-q:a', '5', ogg],
-                                           input=wav, capture_output=True, timeout=600)
-                        if r.returncode == 0:
+                        import fmod_toolkit
+                        r = tt.get('m_Resource') or {}
+                        raw = read_node(nodes, r.get('m_Source', ''), r.get('m_Offset', 0), r.get('m_Size', 0))
+                        if not raw:
+                            raise ValueError('no audio data')
+                        if raw[:4] == b'OggS':
+                            ogg = os.path.join(ddir, 'snd', f'{pid}.ogg')
+                            with open(ogg, 'wb') as f:
+                                f.write(raw)
                             d['_ogg'] = f'{rel_d}/snd/{pid}.ogg'
                         else:
-                            log(f'ffmpeg failed {ac.m_Name}: {r.stderr[:200]}')
+                            wav = next(iter(fmod_toolkit.raw_to_wav(raw, tt.get('m_Name', 'clip'), tt.get('m_Channels') or 2, tt.get('m_Frequency') or 44100).values()))
+                            ogg = os.path.join(ddir, 'snd', f'{pid}.ogg')
+                            pr = subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'wav', '-i', 'pipe:0', '-c:a', 'libvorbis', '-q:a', '5', ogg],
+                                                input=wav, capture_output=True, timeout=600)
+                            if pr.returncode == 0:
+                                d['_ogg'] = f'{rel_d}/snd/{pid}.ogg'
+                            else:
+                                log(f'ffmpeg failed {tt.get("m_Name")}: {pr.stderr[:200]}')
                     except Exception as e:
-                        log(f'audio failed {ac.m_Name}: {e!r}'[:300])
+                        log(f'audio failed {tt.get("m_Name")}: {e!r}'[:300])
                 else:
                     d = clean(o.read_typetree(), sf, norm_name)
                 objs[str(pid)] = {'t': t, 'd': d}
@@ -200,13 +350,15 @@ def convert_bundle(path, out_marker, rel_base, gen, astcenc, quality, jobs, log)
         json.dump({'prrBundle': 1, 'dir': name + '.d', 'files': files, 'container': container}, f, separators=(',', ':'))
     log(f'  {name}: {len(files)} files, {len(tex_jobs)} textures to encode')
     errs = 0
-    with cf.ThreadPoolExecutor(max_workers=jobs) as ex:
-        for i, err in enumerate(ex.map(encode_texture, tex_jobs)):
-            if err:
-                errs += 1
-                log(err)
-            if (i + 1) % 50 == 0:
-                log(f'    encoded {i + 1}/{len(tex_jobs)}')
+    for i, fu in enumerate(futures):
+        err = fu.result()
+        if err:
+            errs += 1
+            log(err)
+        if (i + 1) % 200 == 0:
+            log(f'    encoded {i + 1}/{len(futures)}')
+    pool.shutdown()
+    shutil.rmtree(work, ignore_errors=True)
     shutil.rmtree(tmp, ignore_errors=True)
     return errs
 

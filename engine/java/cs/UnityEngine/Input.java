@@ -131,7 +131,7 @@ public final class Input {
             case "Horizontal": return (keys.contains(275) || keys.contains(100) ? 1 : 0) - (keys.contains(276) || keys.contains(97) ? 1 : 0);
             case "Vertical": return (keys.contains(273) || keys.contains(119) ? 1 : 0) - (keys.contains(274) || keys.contains(115) ? 1 : 0);
             case "Mouse ScrollWheel": return scroll.y;
-            default: return 0;
+            default: return cs.Rewired.ReInput.$action(n);
         }
     }
     public static float GetAxis(String n) { return GetAxisRaw(n); }
@@ -144,7 +144,7 @@ public final class Input {
             case "Cancel": return s.contains(27);
             case "Fire1": return s.contains(306);
             case "Jump": return s.contains(32);
-            default: return false;
+            default: return s == keys ? cs.Rewired.ReInput.$action(n) != 0 : s == keysDown ? cs.Rewired.ReInput.$actionDown(n) : cs.Rewired.ReInput.$actionUp(n);
         }
     }
     public static void ResetInputAxes() { keys.clear(); }

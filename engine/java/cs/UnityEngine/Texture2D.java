@@ -19,6 +19,10 @@ public class Texture2D extends Texture {
     /** optional alpha mask (8 bit, row 0 = bottom) for pixel queries on compressed textures */
     public byte[] $alpha;
     public String $alphaSrc;
+    /** encoded image (LoadImage) decoded only when pixels are needed; lets the GPU path drop CPU pixels */
+    public byte[] $encoded;
+    /** CPU pixels changed by script since they were last uploaded */
+    public boolean $cpuDirty;
 
     private static Texture2D white, black, gray, red, normal;
 
@@ -56,6 +60,13 @@ public class Texture2D extends Texture {
     /** make sure CPU pixels exist (decoding the source image if needed) */
     int[] pixels() {
         if (px != null) return px;
+        if ($encoded != null) {
+            Object[] im = Host.get().decodeImage($encoded);
+            if (im != null) {
+                setFromTopDown((Integer) im[0], (Integer) im[1], (int[]) im[2]);
+                return px;
+            }
+        }
         if ($src != null) {
             byte[] b = Host.get().readData($src);
             Object[] im = b == null ? null : Host.get().decodeImage(b);
@@ -74,10 +85,15 @@ public class Texture2D extends Texture {
     private void loadAlpha() {
         byte[] b = Host.get().readData($alphaSrc);
         if (b == null) return;
+        $alpha = inflate(b, width * height);
+        if ($alpha == null) Debug.LogWarning("bad alpha mask " + $alphaSrc);
+    }
+
+    static byte[] inflate(byte[] b, int size) {
         try {
             java.util.zip.Inflater inf = new java.util.zip.Inflater();
             inf.setInput(b);
-            byte[] out = new byte[width * height];
+            byte[] out = new byte[size];
             int off = 0;
             while (off < out.length && !inf.finished()) {
                 int n = inf.inflate(out, off, out.length - off);
@@ -85,11 +101,27 @@ public class Texture2D extends Texture {
                 off += n;
             }
             inf.end();
-            $alpha = out;
+            return out;
         } catch (java.util.zip.DataFormatException e) {
-            Debug.LogWarning("bad alpha mask " + $alphaSrc);
+            return null;
         }
     }
+
+    /** raw GPU blocks of the converted texture (.astcz = deflated ASTC 4x4 blocks, lossless) */
+    public byte[] $readCompressed() {
+        if ($compressedSrc == null) return null;
+        byte[] b = Host.get().readData($compressedSrc);
+        if (b == null || !$compressedSrc.endsWith("z")) return b;
+        byte[] r = inflate(b, ((width + 3) / 4) * ((height + 3) / 4) * 16);
+        if (r == null) Debug.LogWarning("bad compressed texture " + $compressedSrc);
+        return r;
+    }
+
+    /** after a GPU upload: free the CPU copy when it can be re-created from its source */
+    public void $dropPixels() {
+        if (!$cpuDirty && ($src != null || $encoded != null) && px != null) px = null;
+    }
+    public boolean $reloadable() { return $src != null || $encoded != null || $compressedSrc != null; }
 
     /** true when CPU pixels are not needed for rendering (compressed upload) */
     public boolean $hasPixels() { return px != null; }
@@ -145,6 +177,7 @@ public class Texture2D extends Texture {
     }
     public void SetPixel(int x, int y, Color c) {
         int[] p = pixels();
+        $cpuDirty = true;
         if (x < 0 || y < 0 || x >= width || y >= height) return;
         p[y * width + x] = fromColor(c);
     }
@@ -170,21 +203,23 @@ public class Texture2D extends Texture {
     public void SetPixels(int x, int y, int w, int h, Color[] c) { SetPixels(x, y, w, h, c, 0); }
     public void SetPixels(int x, int y, int w, int h, Color[] c, int mip) {
         int[] p = pixels();
+        $cpuDirty = true;
         for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) p[(y + j) * width + x + i] = fromColor(c[j * w + i]);
     }
     public void SetPixels32(Color32[] c) { SetPixels32(c, 0); }
     public void SetPixels32(Color32[] c, int mip) {
         int[] p = pixels();
+        $cpuDirty = true;
         for (int i = 0; i < p.length && i < c.length; i++) p[i] = fromColor32(c[i]);
     }
     public void SetPixels32(int x, int y, int w, int h, Color32[] c) {
         int[] p = pixels();
+        $cpuDirty = true;
         for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) p[(y + j) * width + x + i] = fromColor32(c[j * w + i]);
     }
     public void Apply() { Apply(true, false); }
     public void Apply(boolean mips) { Apply(mips, false); }
     public void Apply(boolean mips, boolean makeNoLongerReadable) {
-        pixels();
         $version++;
         if (makeNoLongerReadable) readable = false;
     }
@@ -222,6 +257,7 @@ public class Texture2D extends Texture {
     }
     public void LoadRawTextureData(byte[] b) {
         int[] p = pixels();
+        $cpuDirty = true;
         for (int i = 0; i < p.length && i * 4 + 3 < b.length; i++)
             p[i] = ((b[i * 4 + 3] & 0xff) << 24) | ((b[i * 4] & 0xff) << 16) | ((b[i * 4 + 1] & 0xff) << 8) | (b[i * 4 + 2] & 0xff);
     }
@@ -232,7 +268,7 @@ public class Texture2D extends Texture {
         t.width = width; t.height = height; t.format = format; t.filterMode = filterMode; t.wrapModeU = wrapModeU; t.wrapModeV = wrapModeV;
         t.mipCount = mipCount; t.readable = readable; t.$src = $src; t.$compressed = $compressed; t.$compressedFormat = $compressedFormat;
         t.$compressedSrc = $compressedSrc;
-        t.$alpha = $alpha; t.$alphaSrc = $alphaSrc;
+        t.$alpha = $alpha; t.$alphaSrc = $alphaSrc; t.$encoded = $encoded;
         if (px != null) t.px = px.clone();
         return t;
     }

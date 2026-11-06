@@ -23,6 +23,7 @@ public abstract class Gfx {
         public int stencilRef, stencilComp = 8, stencilOp, stencilRead = 255, stencilWrite = 255, colorMask = 15;
         public boolean world;       // world (sprite) vs UI
         public float[] model = new float[16];   // object-to-world (for shaders needing world positions)
+        public Component src;       // the renderer (debugging)
     }
 
     /** start a frame for a target of w x h pixels */

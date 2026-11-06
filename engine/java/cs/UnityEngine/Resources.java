@@ -11,7 +11,14 @@ public final class Resources {
         r.finish();
         return r;
     }
-    public static Object LoadAll(cs.System.Type g, String path) { return java.lang.reflect.Array.newInstance(g.cls, 0); }
+    public static Object LoadAll(cs.System.Type g, String path) {
+        java.util.ArrayList<UObject> l = Loader.resourcesUnder(path, g);
+        Object a = java.lang.reflect.Array.newInstance(g.cls, l.size());
+        for (int i = 0; i < l.size(); i++) java.lang.reflect.Array.set(a, i, l.get(i));
+        return a;
+    }
+    public static UObject[] LoadAll(String path, cs.System.Type t) { return Loader.resourcesUnder(path, t).toArray(new UObject[0]); }
+    public static UObject[] LoadAll(String path) { return LoadAll(path, null); }
     public static Object GetBuiltinResource(cs.System.Type t, String path) { return Loader.builtinResource(t, path); }
     public static AsyncOperation UnloadUnusedAssets() { AsyncOperation a = new AsyncOperation(); a.finish(); return a; }
     public static void UnloadAsset(UObject o) {}

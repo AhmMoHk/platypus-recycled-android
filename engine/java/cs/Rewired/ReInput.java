@@ -85,4 +85,10 @@ public final class ReInput {
     }
 
     private static float key(int a, int b) { return cs.UnityEngine.Input.GetKey(a) || b != 0 && cs.UnityEngine.Input.GetKey(b) ? 1f : 0f; }
+
+    /** Rewired UI actions for the UGUI input module: the system player (menus, which assign no game player)
+     *  and player 0 (unknown action names read 0) */
+    public static float $action(String n) { float a = p0.GetAxisRaw(n), b = system.GetAxisRaw(n); return Math.abs(a) >= Math.abs(b) ? a : b; }
+    public static boolean $actionDown(String n) { return p0.GetButtonDown(n) || system.GetButtonDown(n); }
+    public static boolean $actionUp(String n) { return p0.GetButtonUp(n) || system.GetButtonUp(n); }
 }

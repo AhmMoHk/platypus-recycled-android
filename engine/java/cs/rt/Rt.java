@@ -271,7 +271,8 @@ public final class Rt {
             else if (ct == byte.class) Array.setByte(arr, i, unboxB(v));
             else if (ct == short.class) Array.setShort(arr, i, unboxS(v));
         } else if (Struct.class.isAssignableFrom(ct) && v != null) {
-            ((Struct) Array.get(arr, i)).$set(v);
+            Struct cur = (Struct) Array.get(arr, i);
+            if (cur != null) cur.$set(v); else Array.set(arr, i, copyStruct(v));
         } else {
             Array.set(arr, i, v);
         }
@@ -287,5 +288,29 @@ public final class Rt {
         Object[] out = new Object[n];
         for (int i = 0; i < n; i++) out[i] = Array.get(arr, i);
         return out;
+    }
+
+    /** is v (boxed the .NET way) an instance of t? null cannot be judged and matches */
+    public static boolean instOf(cs.System.Type t, Object v) {
+        if (v == null || t == null) return true;
+        Class<?> c = t.cls;
+        if (c.isPrimitive()) {
+            if (c == int.class) return v instanceof Integer;
+            if (c == float.class) return v instanceof Float;
+            if (c == boolean.class) return v instanceof Boolean;
+            if (c == long.class) return v instanceof Long;
+            if (c == double.class) return v instanceof Double;
+            if (c == char.class) return v instanceof Character;
+            if (c == byte.class) return v instanceof Byte;
+            if (c == short.class) return v instanceof Short;
+        }
+        return t.IsInstanceOfType(v);
+    }
+
+    /** `x is C<A,B>` for erased generic collections */
+    public static boolean genMatch(Object o, cs.System.Type t) {
+        if (o instanceof cs.System.Collections.Generic.Dictionary_2) return ((cs.System.Collections.Generic.Dictionary_2) o).$argsMatch(t.gargs);
+        if (o instanceof cs.System.Collections.Generic.List_1) return ((cs.System.Collections.Generic.List_1) o).$argsMatch(t.gargs);
+        return true;
     }
 }

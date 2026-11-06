@@ -82,7 +82,92 @@ public final class MainActivity extends Activity {
             | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
 
-    void setTargetFps(int fps) { if (fps > 0) targetFps = fps; }
+    void setTargetFps(final int fps) {
+        if (fps <= 0) return;
+        targetFps = fps;
+        runOnUiThread(new Runnable() { public void run() { pickDisplayMode(fps); } });
+    }
+
+    /** ask the display for a refresh rate that can show the chosen frame rate (90/120/144 Hz panels) */
+    private void pickDisplayMode(int fps) {
+        try {
+            android.view.Display d = getWindowManager().getDefaultDisplay();
+            android.view.Display.Mode cur = d.getMode(), best = null;
+            for (android.view.Display.Mode m : d.getSupportedModes()) {
+                if (m.getPhysicalWidth() != cur.getPhysicalWidth() || m.getPhysicalHeight() != cur.getPhysicalHeight()) continue;
+                float hz = m.getRefreshRate();
+                if (hz + 0.5f < fps) continue;
+                if (best == null || hz < best.getRefreshRate()) best = m;
+            }
+            if (best == null) for (android.view.Display.Mode m : d.getSupportedModes())
+                if (m.getPhysicalWidth() == cur.getPhysicalWidth() && (best == null || m.getRefreshRate() > best.getRefreshRate())) best = m;
+            if (best != null) {
+                WindowManager.LayoutParams lp = getWindow().getAttributes();
+                lp.preferredDisplayModeId = best.getModeId();
+                getWindow().setAttributes(lp);
+            }
+        } catch (RuntimeException e) {
+            android.util.Log.w("prr", "display mode: " + e);
+        }
+    }
+
+    /** native settings dialog (gear button): frame rate, 4K assets, touch controls, unlock everything */
+    void openSettings() {
+        runOnUiThread(new Runnable() {
+            public void run() {
+                final android.widget.LinearLayout l = new android.widget.LinearLayout(MainActivity.this);
+                l.setOrientation(android.widget.LinearLayout.VERTICAL);
+                int pad = (int) (16 * getResources().getDisplayMetrics().density);
+                l.setPadding(pad, pad, pad, pad);
+                android.widget.TextView fl = new android.widget.TextView(MainActivity.this);
+                fl.setText("Frame rate / معدل الإطارات");
+                l.addView(fl);
+                final android.widget.RadioGroup rg = new android.widget.RadioGroup(MainActivity.this);
+                rg.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+                for (int f : Settings.FPS_OPTIONS) {
+                    android.widget.RadioButton rb = new android.widget.RadioButton(MainActivity.this);
+                    rb.setText(f + "");
+                    rb.setId(f);
+                    rg.addView(rb);
+                }
+                rg.check(Settings.fps());
+                l.addView(rg);
+                final android.widget.CheckBox tc = new android.widget.CheckBox(MainActivity.this);
+                tc.setText("Touch controls / أزرار اللمس");
+                tc.setChecked(Settings.showControls());
+                l.addView(tc);
+                final android.widget.CheckBox ua = new android.widget.CheckBox(MainActivity.this);
+                ua.setText("Unlock everything (100%) / فتح كل شي");
+                ua.setChecked(Settings.unlockAll());
+                l.addView(ua);
+                new android.app.AlertDialog.Builder(MainActivity.this)
+                    .setTitle("Platypus Recycled")
+                    .setView(l)
+                    .setPositiveButton("OK", new android.content.DialogInterface.OnClickListener() {
+                        public void onClick(android.content.DialogInterface di, int w) {
+                            final int fps = rg.getCheckedRadioButtonId() > 0 ? rg.getCheckedRadioButtonId() : 60;
+                            Settings.setFps(fps);
+                            Settings.setShowControls(tc.isChecked());
+                            final boolean unlock = ua.isChecked() && !Settings.unlockAll();
+                            Settings.setUnlockAll(ua.isChecked());
+                            immersive();
+                            view.queueEvent(new Runnable() {
+                                public void run() {
+                                    cs.UnityEngine.Application.set_targetFrameRate(fps);
+                                    controls.setVisible(tc.isChecked());
+                                    if (unlock) Settings.unlockEverything();
+                                }
+                            });
+                        }
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .setOnDismissListener(new android.content.DialogInterface.OnDismissListener() {
+                        public void onDismiss(android.content.DialogInterface di) { immersive(); }
+                    })
+                    .show();
+            }
+        });
+    }
 
     // ------------------------------------------------------------------ frame loop
     private void frame() {
@@ -99,6 +184,7 @@ public final class MainActivity extends Activity {
                 Settings.apply();
                 controls.load(host);
                 controls.setVisible(Settings.showControls());
+                controls.onSettings = new Runnable() { public void run() { openSettings(); } };
                 startAudio();
                 booted = true;
                 lastFrameNanos = System.nanoTime();

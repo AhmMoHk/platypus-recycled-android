@@ -386,6 +386,7 @@ public final class Loader {
 
     static Class<?> builtinClass(String t) {
         if (builtinClasses.containsKey(t)) return builtinClasses.get(t);
+        if (t.equals("Unknown (893571522)")) return builtinClass("CustomCollider2D");   // class id missing in UnityPy
         Class<?> c = null;
         String[] pk = {"cs.UnityEngine.", "cs.UnityEngine.Rendering.", "cs.UnityEngine.Animations.", "cs.UnityEngine.Video.", "cs.UnityEngine.U2D."};
         for (String p : pk) {
@@ -502,6 +503,28 @@ public final class Loader {
             if (first == null) first = o;
         }
         return t == null ? first : null;
+    }
+
+    /** Resources.LoadAll: every asset of type t under the folder path */
+    static java.util.ArrayList<UObject> resourcesUnder(String path, cs.System.Type t) {
+        String p = path.toLowerCase();
+        while (p.endsWith("/")) p = p.substring(0, p.length() - 1);
+        java.util.ArrayList<UObject> r = new java.util.ArrayList<>();
+        Ctx ctx = new Ctx(file("globalgamemanagers"), true);
+        for (java.util.Map.Entry<String, ArrayList<Object>> e : resources().entrySet()) {
+            String k = e.getKey();
+            if (!(p.isEmpty() || k.equals(p) || k.startsWith(p + "/"))) continue;
+            for (Object pp : e.getValue()) {
+                UObject o = ctx.ref(pp);
+                if (o == null) continue;
+                if (t == null || t.cls.isInstance(o)) r.add(o);
+                else if (o instanceof GameObject && Component.class.isAssignableFrom(t.cls)) {
+                    UObject c = ((GameObject) o).GetComponent(t);
+                    if (c != null) r.add(c);
+                }
+            }
+        }
+        return r;
     }
 
     /** Resources.GetBuiltinResource: built-in font / sprites */

@@ -55,6 +55,18 @@ canvases with clipping and a GLES/software backend), audio (clip decode + softwa
 → actions), fonts (TrueType reader + SDF rasterizer + atlas packer for TextMeshPro), AssetBundle emulation,
 and the startup sequence (`RuntimeInitializeOnLoad` phases).
 
+## Port patches (`tools/cil/patches.py`)
+
+Small, checked patches on the translated code — the build stops if one no longer matches:
+
+* `CameraManager` letterboxing → the camera always covers the full display (`cs.rt.Port.cameraRect`)
+* `GameUtils.AdjustXToWideScreen` / `AdjustOriginalPosToWideScreen` → the ±100 widescreen offset becomes
+  `Port.wideOffset(aspect)`: exactly 100 at 16:9 (PC behaviour), larger on 19.5:9 / 20:9 / 21:9 phones so
+  enemies still spawn just off the real screen edge; the player bounds already come from the camera viewport
+* `BackgroundManager` clear-colour quad → drawn only on stages that clear the background, sized to the screen
+  (Unity leaves its order against the sky to chance; on wide screens it showed as a white band)
+* `DisplayPlayerLives` / `ShipPanelScript` → no "press fire to join" prompts for a second player
+
 ## Port decisions
 
 * single player only — the second player and controller checks are removed
@@ -62,8 +74,8 @@ and the startup sequence (`RuntimeInitializeOnLoad` phases).
 * true fullscreen at any aspect ratio, dynamic bounds and spawn margins
 * 4K (HighEnd) assets; frame rate selectable 60 / 90 / 120 / 144
 * all content, including Steam Workshop items, listed in the Mods menu — without the Steam badge
-* game data is converted once on the phone from your own copy (GPU texture formats + Vorbis), so the APK
-  stays small
+* game data is converted once from your own copy (ASTC 4x4 textures, deflated losslessly on disk —
+  2.0 GB → ~0.5 GB for the main bundle — plus Vorbis audio), so the APK stays small
 
 ## Android shell (`android/`)
 
@@ -85,4 +97,14 @@ and the startup sequence (`RuntimeInitializeOnLoad` phases).
    `python3 tools/export/convert_assets.py "<game>/Platypus_Data" out --workshop "<steam>/steamapps/workshop/content/<appid>"`
 4. Install the APK, start it, pick the `out` folder when asked.
 
-`desktop/run.sh [frames]` runs the translated game headless on a PC for testing the engine.
+`desktop/run.sh [frames]` runs the translated game headless on a PC for testing the engine
+(`JOPTS="-Dprr.shots=600,1200 -Dprr.input=600:key@13"` saves software-rendered screenshots and injects keys).
+
+Older data packs: `tools/export/deflate_astc.py <pack>` upgrades `.astc` → `.astcz`, and
+`tools/export/reread_monobehaviours.py <bundle> <marker>` re-reads a bundle's MonoBehaviours with its own
+type trees.
+
+## Status
+
+Verified in the desktop harness (software renderer) at 20:9: splash → mod loading (all mods + Workshop) →
+title → profile → mode/difficulty → gameplay (ship, enemies, HUD, game over) with no runtime errors.

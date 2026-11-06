@@ -930,6 +930,7 @@ class Xlat:
         flds = [f for f in t.fields if not f.static]
         e(f'public {cls} $copy() {{ {cls} c = new {cls}(); c.$set(this); return c; }}')
         e(f'public void $set(Object o) {{')
+        e(f'    if (o == null) {{ $clear(); return; }}   // default(T) from generic BCL code')
         e(f'    {cls} s = ({cls}) o;')
         for f in flds:
             n = self.mg.field(f)
@@ -987,8 +988,10 @@ class Xlat:
             e(f'public abstract {ret} {name}({self.param_decl(m)});')
             return
         if not m.rva:
-            # extern / runtime implemented
-            self.emit_stub(m, e, 'no body')
+            # extern (P/Invoke into Windows DLLs etc.): nothing to call on Android -> default result
+            mods2 = 'public ' + ('static ' if m.static else '')
+            body = '' if ret == 'void' else f' return {self.default_of(ret)};'
+            e(f'{mods2}{ret} {name}({self.param_decl(m)}) {{{body} }}   // extern')
             return
         from .method import MethodX
         mx = MethodX(self, t, m)

@@ -195,11 +195,15 @@ public class Type extends cs.System.Reflection.MemberInfo {
 
     /** Runs the parameterless translated constructor ($ctor_Simple) of class c on o, if c declares one. */
     public static void construct(Object o, Class<?> c) {
-        String simple = c.getName().substring(c.getName().lastIndexOf('.') + 1);
         try {
-            java.lang.reflect.Method m = c.getMethod("$ctor_" + simple);
-            m.invoke(o);
-        } catch (NoSuchMethodException ignored) {
+            // the nearest class (hand-written facades may not declare one) with a field-initializer constructor
+            for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
+                String simple = k.getName().substring(k.getName().lastIndexOf('.') + 1);
+                java.lang.reflect.Method m;
+                try { m = k.getMethod("$ctor_" + simple); } catch (NoSuchMethodException e) { continue; }
+                m.invoke(o);
+                break;
+            }
         } catch (java.lang.reflect.InvocationTargetException e) {
             throw cs.rt.Rt.toThrowable(e.getCause());
         } catch (IllegalAccessException e) {

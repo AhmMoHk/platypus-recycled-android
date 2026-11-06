@@ -51,7 +51,8 @@ public final class AndroidHost extends Host {
         }
     }
     @Override public void quit() { if (activity != null) activity.finish(); }
-    @Override public void setTargetFrameRate(int fps) { if (activity != null) activity.setTargetFps(fps); }
+    /** the port's own frame-rate setting wins over values the game sets */
+    @Override public void setTargetFrameRate(int fps) { if (activity != null) activity.setTargetFps(Settings.fps()); }
     @Override public String clipboard() {
         android.content.ClipboardManager cm = (android.content.ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
         android.content.ClipData d = cm == null ? null : cm.getPrimaryClip();

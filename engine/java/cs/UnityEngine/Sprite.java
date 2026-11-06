@@ -170,12 +170,22 @@ public class Sprite extends UObject {
             ArrayList<Object> ib = Loader.l(rd, "m_IndexBuffer");
             int[] idx = new int[ib.size() / 2];
             for (int i = 0; i < idx.length; i++) idx[i] = (Json.i(ib.get(i * 2)) & 0xff) | ((Json.i(ib.get(i * 2 + 1)) & 0xff) << 8);
-            if (uc == null || uc[3] < 2) {
-                // no uv channel: derive from positions
+            boolean noUv = uc == null || uc[3] < 2;
+            if (!noUv) {
+                noUv = true;
+                for (float f : uv) if (f != 0) { noUv = false; break; }
+            }
+            if (noUv) {
+                // no (or zeroed) uv channel: Unity derives the uvs from m_RD.uvTransform (ppu, x origin, ppu, y origin)
                 float tw = texture == null ? 1 : texture.width, th = texture == null ? 1 : texture.height;
+                HashMap<String, Object> ut = rd.get("uvTransform") instanceof HashMap ? Json.map(rd.get("uvTransform")) : null;
+                float sx = pixelsPerUnit, ox = rect.m_XMin + pivot.x, sy = pixelsPerUnit, oy = rect.m_YMin + pivot.y;
+                if (ut != null && Loader.f(ut, "x", 0) != 0) {
+                    sx = Loader.f(ut, "x", sx); ox = Loader.f(ut, "y", ox); sy = Loader.f(ut, "z", sy); oy = Loader.f(ut, "w", oy);
+                }
                 for (int v = 0; v < n; v++) {
-                    uv[v * 2] = (rect.m_XMin + pivot.x + pos[v * 2] * pixelsPerUnit) / tw;
-                    uv[v * 2 + 1] = (rect.m_YMin + pivot.y + pos[v * 2 + 1] * pixelsPerUnit) / th;
+                    uv[v * 2] = (ox + pos[v * 2] * sx) / tw;
+                    uv[v * 2 + 1] = (oy + pos[v * 2 + 1] * sy) / th;
                 }
             }
             verts = pos;

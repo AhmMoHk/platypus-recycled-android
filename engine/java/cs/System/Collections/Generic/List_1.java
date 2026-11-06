@@ -223,4 +223,11 @@ public class List_1 implements IList_1, IReadOnlyList_1, cs.System.Collections.I
 
     // view for the debugger / toString
     @Override public String toString() { return "System.Collections.Generic.List`1[" + size + "]"; }
+
+    /** `x is List<T>` with erased generics: judged by the first element (an empty list matches) */
+    public boolean $argsMatch(cs.System.Type[] g) {
+        if (g == null || g.length < 1) return true;
+        for (int i = 0; i < get_Count(); i++) if (items[i] != null) return cs.rt.Rt.instOf(g[0], items[i]);
+        return true;
+    }
 }

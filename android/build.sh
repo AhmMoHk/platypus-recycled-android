@@ -10,7 +10,7 @@ OUT=$ROOT/build/apk
 rm -rf "$OUT" && mkdir -p "$OUT/classes" "$OUT/dex"
 find "$ROOT/rt/java" "$ROOT/gen/java" "$ROOT/gen/stubs" "$ROOT/android/src" -name '*.java' > "$OUT/sources.txt"
 echo "javac: $(wc -l < "$OUT/sources.txt") files"
-javac -nowarn -encoding UTF-8 -source 8 -target 8 -J-Xmx6g -bootclasspath "$JAR" -cp "$JAR" \
+javac -nowarn -encoding UTF-8 -source 8 -target 8 -J-Xmx3g -bootclasspath "$JAR" -cp "$JAR" \
       -d "$OUT/classes" @"$OUT/sources.txt" 2> "$OUT/javac.log" || { grep -B1 -A3 "error:" "$OUT/javac.log" | head -80; exit 1; }
 echo "dx"
 "$BT/dx" -JXmx6g --dex --multi-dex --min-sdk-version=24 --output="$OUT/dex" "$OUT/classes"

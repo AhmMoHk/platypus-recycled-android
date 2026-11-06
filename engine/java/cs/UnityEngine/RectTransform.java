@@ -148,6 +148,7 @@ public class RectTransform extends Transform {
 
     @Override public void $cloneFrom(Component src, Eng.CloneCtx ctx) {
         super.$cloneFrom(src, ctx);
+        if (!(src instanceof RectTransform)) return;   // Transform upgraded to RectTransform
         RectTransform s = (RectTransform) src;
         anchorMin.$set(s.anchorMin);
         anchorMax.$set(s.anchorMax);

@@ -380,6 +380,9 @@ public final class Eng {
                 }
             }
         }
+        // built-in components declared [RequireComponent(typeof(RectTransform))] in the engine
+        if ((t.cls == Canvas.class || t.cls == CanvasGroup.class) && !(go.transform instanceof RectTransform))
+            addComponent(go, cs.System.Type.of(RectTransform.class));
         Component c;
         if (t.cls == Transform.class || t.cls == RectTransform.class) {
             if (t.cls == RectTransform.class && !(go.transform instanceof RectTransform)) {

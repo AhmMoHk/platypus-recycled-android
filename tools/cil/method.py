@@ -1433,6 +1433,10 @@ class MethodX:
             self.emit(f'{t} = {e};')
             e = t
         if k == 'gp':
+            if ct[0] == 'W':
+                # method generic parameter: its runtime Type is passed in as $T<n> (`component is T`)
+                self.push(X.Val(f'($T{ct[1]}.IsInstanceOfType({e}) ? {e} : null)', 'Object', ct, frozenset([e]), v.heap))
+                return
             self.push(X.Val(e, 'Object', ct, frozenset([e]), v.heap))
             self.ts.warn('isinst generic parameter')
             return
@@ -1447,7 +1451,18 @@ class MethodX:
             return
         j = self.jt(ct)
         if j == 'Object':
+            name = ct[1] if len(ct) > 1 and isinstance(ct[1], str) else None
+            test = {'System.Enum': f'{e} instanceof cs.rt.BoxedEnum',
+                    'System.Array': f'({e} != null && {e}.getClass().isArray())',
+                    'System.ValueType': f'({e} instanceof cs.rt.Struct || {e} instanceof cs.rt.BoxedEnum || {e} instanceof Number || {e} instanceof Boolean || {e} instanceof Character)'}.get(name)
+            if test is not None:
+                self.push(X.Val(f'({test} ? {e} : null)', 'Object', ct, frozenset([e]), v.heap))
+                return
             self.push(X.Val(e, 'Object', ct, frozenset([e]), v.heap))
+            return
+        if ct[0] == 'G' and j in ('cs.System.Collections.Generic.Dictionary_2', 'cs.System.Collections.Generic.List_1'):
+            te = self.x.type_expr(ct, self)
+            self.push(X.Val(f'({e} instanceof {j} && cs.rt.Rt.genMatch({e}, {te}) ? ({j}) {e} : null)', j, ct, frozenset([e]), v.heap))
             return
         self.push(X.Val(f'({e} instanceof {j} ? ({j}) {e} : null)', j, ct, frozenset([e]), v.heap))
 

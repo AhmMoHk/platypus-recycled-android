@@ -123,4 +123,11 @@ public class Dictionary_2 implements IDictionary_2, IReadOnlyDictionary_2, cs.Sy
         for (Map.Entry<Object, Object> e : map.entrySet()) { a[i++] = unwrap(e.getKey()); a[i++] = e.getValue(); }
         return a;
     }
+
+    /** `x is Dictionary<K,V>` with erased generics: judged by the first entry (an empty one matches) */
+    public boolean $argsMatch(cs.System.Type[] g) {
+        if (g == null || g.length < 2) return true;
+        for (Map.Entry<Object, Object> e : map.entrySet()) return cs.rt.Rt.instOf(g[0], unwrap(e.getKey())) && cs.rt.Rt.instOf(g[1], e.getValue());
+        return true;
+    }
 }

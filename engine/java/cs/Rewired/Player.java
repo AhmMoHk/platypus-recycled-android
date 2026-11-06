@@ -53,7 +53,7 @@ public class Player {
 
     /** per frame: copy the sampled action values for the controllers this player owns */
     void update(HashMap<String, Float> touch, HashMap<String, Float> keys) {
-        boolean hasTouch = controllers.controllers.Contains(ReInput.touch), hasKeys = controllers.controllers.Contains(ReInput.keyboard);
+        boolean hasTouch = controllers.hasMouse || controllers.controllers.Contains(ReInput.touch), hasKeys = controllers.hasKeyboard || controllers.controllers.Contains(ReInput.keyboard);
         String[] names = ReInput.ACTIONS;
         for (String a : names) {
             float[] s = slot(a);
