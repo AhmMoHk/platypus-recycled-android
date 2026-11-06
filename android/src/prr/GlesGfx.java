@@ -61,7 +61,8 @@ public final class GlesGfx extends Gfx {
         "precision mediump float;\n" +
         "uniform sampler2D uTex;\n" +
         "uniform vec4 uFogColor;\n" +
-        "uniform float uFogDistance, uFogMul, uEmission, uDayCycle, uTransparency, uBlink, uLayer, uTopV, uTopFade;\n" +
+        "uniform vec4 uDayTint;\n" +
+        "uniform float uFogDistance, uFogMul, uFogDensity, uEmission, uDayCycle, uTransparency, uBlink, uLayer, uTopV, uTopFade;\n" +
         "varying vec4 vCol;\n" +
         "varying vec4 vUV0;\n" +
         "varying vec3 vWorld;\n" +
@@ -75,9 +76,10 @@ public final class GlesGfx extends Gfx {
         "  if (a <= 0.0) discard;\n" +
         // the game uses Unity's linear colour space: shade in linear, write sRGB
         "  vec3 c = lin(t.rgb) * lin(vCol.rgb);\n" +
-        "  c *= mix(1.0, uDayCycle, step(0.001, uDayCycle));\n" +
-        "  float fog = clamp(uFogDistance * uFogMul, 0.0, 1.0);\n" +
-        "  c = mix(c, lin(uFogColor.rgb), fog * uFogColor.a);\n" +
+        // global day/night tint (set by the game every frame), as strongly as the layer's _DayCycleMultiplier
+        "  c *= mix(vec3(1.0), lin(uDayTint.rgb), clamp(uDayCycle, 0.0, 1.0));\n" +
+        "  float fog = clamp(uFogDistance * uFogMul * uFogDensity, 0.0, 1.0);\n" +
+        "  c = mix(c, lin(uFogColor.rgb), fog);\n" +
         "  c *= uEmission;\n" +
         "  c = mix(c, vec3(1.0), uBlink);\n" +
         "  gl_FragColor = vec4(srgb(c), a * uTransparency);\n" +
@@ -174,6 +176,8 @@ public final class GlesGfx extends Gfx {
     private static final int P_MAINTEX = Shader.PropertyToID("_MainTex"), P_COLOR = Shader.PropertyToID("_Color"),
         P_FOGDIST = Shader.PropertyToID("_FogDistance"), P_FOGMUL = Shader.PropertyToID("_FogDistanceMultiplier"),
         P_EMISSION = Shader.PropertyToID("_EmissionPower"), P_SCROLL = Shader.PropertyToID("_Scrolling"),
+        P_REGULAR = Shader.PropertyToID("_DoRegularPass"), P_DAYTINT = Shader.PropertyToID("_PlatypusDayTint"),
+        P_FOGDENSITY = Shader.PropertyToID("_FogDensity"),
         P_DAY = Shader.PropertyToID("_DayCycleMultiplier"), P_TRANSP = Shader.PropertyToID("_Transparency"),
         P_BLINKSTART = Shader.PropertyToID("_BlinkStart"), P_BLINKDUR = Shader.PropertyToID("_BlinkDuration"),
         P_LAYER = Shader.PropertyToID("_Layer"), P_FOGCOLOR = Shader.PropertyToID("_FogColor"),
@@ -305,6 +309,8 @@ public final class GlesGfx extends Gfx {
 
     @Override public void draw(Item it) {
         if (it.count == 0 || it.idxCount == 0 || it.pos == null) return;
+        // layers whose material turns the regular pass off (the stage ground/lake: reflection only) are not drawn
+        if (it.mat != null && it.mat.$props().$float(P_REGULAR, 1f) == 0f) return;
         int p = programFor(it.shader);
         GLES20.glUseProgram(prog[p]);
         // geometry
@@ -360,6 +366,9 @@ public final class GlesGfx extends Gfx {
                 GLES20.glUniform1f(u(p, "uTopV"), topV);
                 GLES20.glUniform1f(u(p, "uTopFade"), topFade);
                 GLES20.glUniform1f(u(p, "uDayCycle"), prop(it, P_DAY, 0));
+                float[] dt = vec(it, P_DAYTINT, WHITE);
+                GLES20.glUniform4f(u(p, "uDayTint"), dt[0], dt[1], dt[2], dt[3]);
+                GLES20.glUniform1f(u(p, "uFogDensity"), prop(it, P_FOGDENSITY, 1));
                 GLES20.glUniform1f(u(p, "uTransparency"), prop(it, P_TRANSP, 1));
                 GLES20.glUniform1f(u(p, "uLayer"), prop(it, P_LAYER, 0));
                 float bs = prop(it, P_BLINKSTART, -1), bd = prop(it, P_BLINKDUR, 0);

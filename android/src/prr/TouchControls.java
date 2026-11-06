@@ -96,6 +96,7 @@ final class TouchControls {
 
     /** Android MotionEvent coordinates are top-left based; y is flipped to screen space by the caller */
     boolean down(int ptr, float x, float y) {
+        if (loading) return false;
         if (gearPtr < 0 && dist(x, y, gearX, gearY) <= gearR * 1.4f) {
             gearPtr = ptr;
             return true;
@@ -168,7 +169,18 @@ final class TouchControls {
     }
 
     /** drawn after the game, in screen pixels */
+    /** nothing on the splash / mod loading screens or while the game shows its loading screen */
+    private volatile boolean loading = true;
+
     void draw(Gfx g) {
+        boolean l;
+        try {
+            String sc = cs.UnityEngine.SceneManagement.SceneManager.GetActiveScene().get_name();
+            l = "SplashScreen".equals(sc) || "LoadModScreen".equals(sc) || cs.global.LoadingScreen.get_IsLoading();
+        } catch (Throwable e) { l = false; }
+        if (l && !loading) cancelAll();
+        loading = l;
+        if (l) return;
         float[] vp = Matrix4x4.Ortho(0, Screen.get_width(), 0, Screen.get_height(), -1, 1).m;
         quad(g, vp, gear, gearX, gearY, gearR * (gearPtr >= 0 ? 0.92f : 1f), 0.8f);
         if (!visible) return;

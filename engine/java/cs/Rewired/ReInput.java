@@ -61,6 +61,9 @@ public final class ReInput {
         t.put("Fire", TouchInput.fire ? 1f : 0f);
         t.put("Pause", TouchInput.pause ? 1f : 0f);
         t.put("UICancel", TouchInput.back ? 1f : 0f);
+        t.put("UIHorizontal", Math.abs(mx) > 0.5f ? Math.signum(mx) : 0f);
+        t.put("UIVertical", Math.abs(my) > 0.5f ? Math.signum(my) : 0f);
+        t.put("UISubmit", TouchInput.fire ? 1f : 0f);
         boolean tapAny = TouchInput.fire || TouchInput.pause || TouchInput.back || cs.UnityEngine.Input.get_touchCount() > 0 || cs.UnityEngine.Input.GetMouseButton(0);
         touch.sample(tapAny, tapAny && !prevTap);
         prevTap = tapAny;

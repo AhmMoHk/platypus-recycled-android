@@ -46,7 +46,8 @@ public final class AudioMix {
     /** linear-interpolated resampling; returns false when the clip ended */
     private static boolean render(AudioClip c, double[] posRef, float pitch, boolean loop, float vol, float pan, int frames, int rate) {
         short[] pcm = c.$pcm;
-        if (pcm == null || c.samples == 0) return false;
+        if (pcm == null) return c.loadState == 1;   // still decoding in the background: silence for now
+        if (c.samples == 0) return false;
         int ch = c.channels, n = c.samples;
         double step = pitch * c.frequency / (double) rate;
         double pos = posRef[0];

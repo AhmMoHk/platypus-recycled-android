@@ -94,11 +94,13 @@ final class SoftGfx extends Gfx {
     private float[] vec(Item it, int id, float[] def) {
         if (it.block != null && it.block.$vector(id) != null) return it.block.$vector(id);
         if (it.mat != null && it.mat.$props().$vector(id) != null) return it.mat.$props().$vector(id);
-        return def;
+        float[] g = Shader.$globals().$vector(id);
+        return g != null ? g : def;
     }
     private float flt(Item it, int id, float def) {
+        if (it.block != null) { float v = it.block.$float(id, Float.NaN); if (v == v) return v; }
         if (it.mat != null) { float v = it.mat.$props().$float(id, Float.NaN); if (v == v) return v; }
-        return def;
+        return Shader.$globals().$float(id, def);
     }
 
     static boolean drawLog = Boolean.getBoolean("prr.drawlog");
@@ -113,7 +115,15 @@ final class SoftGfx extends Gfx {
         int[] tp = te == null ? null : (int[]) te[0];
         int tw = te == null ? 1 : (Integer) te[1], th = te == null ? 1 : (Integer) te[2];
         String sh = it.shader == null ? "" : it.shader;
-        boolean sdf = sh.contains("Distance Field"), morph = sh.contains("MorphText");
+        if (it.mat != null && it.mat.$props().$float(Shader.PropertyToID("_DoRegularPass"), 1f) == 0f) return;
+        boolean sdf = sh.contains("Distance Field"), morph = sh.contains("MorphText"), spr = sh.contains("SpriteShader");
+        // same sprite shading as the GLES backend: linear space, day tint, fog, day/night emission
+        float[] dtn = vec(it, Shader.PropertyToID("_PlatypusDayTint"), new float[]{1, 1, 1, 1}), fgc = vec(it, Shader.PropertyToID("_FogColor"), new float[]{0, 0, 0, 0});
+        float dcy = Math.max(0, Math.min(1, flt(it, Shader.PropertyToID("_DayCycleMultiplier"), 0)));
+        float fga = Math.max(0, Math.min(1, flt(it, Shader.PropertyToID("_FogDistance"), 0) * flt(it, Shader.PropertyToID("_FogDistanceMultiplier"), 1) * flt(it, Shader.PropertyToID("_FogDensity"), 1)));
+        float emi = flt(it, Shader.PropertyToID("_EmissionPower"), 1);
+        float[] mul = new float[3], fogl = new float[3];
+        for (int q = 0; q < 3; q++) { mul[q] = (1 - dcy) + dcy * (float) Math.pow(dtn[q], 2.2); fogl[q] = (float) Math.pow(fgc[q], 2.2); }
         float[] face = vec(it, P_FACECOLOR, new float[]{1, 1, 1, 1}), outline = vec(it, P_OUTLINECOLOR, new float[]{0, 0, 0, 1});
         float ow = flt(it, P_OUTLINEWIDTH, 0);
         float[] hi = vec(it, P_HIGH, new float[]{1, 1, 1, 1}), lo = vec(it, P_LOW, new float[]{1, 1, 1, 1}), tc = vec(it, P_TMPCOLOR, new float[]{1, 1, 1, 1});
@@ -180,6 +190,9 @@ final class SoftGfx extends Gfx {
                             al *= ta;
                         } else {
                             r *= tr; g *= tg; bl *= tb; al *= ta;
+                            if (spr) {
+                                r = shade(r, mul[0], fogl[0], fga, emi); g = shade(g, mul[1], fogl[1], fga, emi); bl = shade(bl, mul[2], fogl[2], fga, emi);
+                            }
                         }
                     }
                     if (stencilTest) stencil[fi] = (byte) stencilOp(it, stencil[fi] & 0xff);
@@ -193,6 +206,11 @@ final class SoftGfx extends Gfx {
         }
     }
 
+    private static float shade(float c, float mul, float fog, float fa, float em) {
+        double l = Math.pow(Math.max(0, c), 2.2) * mul;
+        l = (l * (1 - fa) + fog * fa) * em;
+        return (float) Math.pow(l, 1 / 2.2);
+    }
     private static float lerp3(int[] c, int a, int b, int cc, float wa, float wb, float wc, int sh) {
         return (((c[a] >>> sh) & 255) * wa + ((c[b] >>> sh) & 255) * wb + ((c[cc] >>> sh) & 255) * wc) / 255f;
     }

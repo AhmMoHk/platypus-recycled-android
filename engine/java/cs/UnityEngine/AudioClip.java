@@ -25,9 +25,25 @@ public class AudioClip extends UObject {
     }
     public static AudioClip Create(String name, int len, int ch, int freq, boolean stream, AudioClip$PCMReaderCallback cb) { return Create(name, len, ch, freq, stream); }
 
-    public float get_length() { ensure(); return frequency == 0 ? 0 : (float) samples / frequency; }
-    public int get_samples() { ensure(); return samples; }
-    public int get_channels() { ensure(); return channels; }
+    public float get_length() { meta(); return frequency == 0 ? 0 : (float) samples / frequency; }
+    public int get_samples() { meta(); return samples; }
+    public int get_channels() { meta(); return channels; }
+
+    /** length/channels are known from the asset metadata; only clips without it are decoded for them */
+    private void meta() { if (samples <= 0 && $pcm == null) ensure(); }
+
+    private static final java.util.concurrent.ExecutorService DECODER = java.util.concurrent.Executors.newSingleThreadExecutor(new java.util.concurrent.ThreadFactory() {
+        public Thread newThread(Runnable r) { Thread t = new Thread(r, "audio-decode"); t.setDaemon(true); return t; }
+    });
+
+    /** start decoding in the background (Play): the mixer plays silence until the samples are there */
+    public void $request() {
+        synchronized (this) {
+            if ($pcm != null || loadState == 3 || loadState == 1) return;
+            loadState = 1;
+        }
+        DECODER.execute(new Runnable() { public void run() { ensure(); } });   // ensure() leaves state 1 -> 2 / 3
+    }
     public int get_frequency() { ensure(); return frequency; }
     public int get_loadState() { return loadState; }
     public int get_loadType() { return stream ? 2 : 0; }

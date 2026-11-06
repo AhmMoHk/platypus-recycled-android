@@ -30,7 +30,8 @@ public final class MainActivity extends Activity {
     private final TouchControls controls = new TouchControls();
     private AndroidHost host;
     private volatile int targetFps = 60;
-    private volatile boolean dataReady, booted, surfaceLost;
+    private volatile boolean dataReady, booted, surfaceLost, loadReported;
+    private long bootNanos;
     private long lastFrameNanos;
     private Thread audioThread;
     private volatile boolean audioRun;
@@ -71,7 +72,11 @@ public final class MainActivity extends Activity {
             @Override public void onDrawFrame(GL10 gl) { frame(); }
         });
         view.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
-        setContentView(view);
+        android.widget.FrameLayout root = new android.widget.FrameLayout(this);
+        root.addView(view, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        setContentView(root);
+        Diag.init(this, root);
+        Diag.add("start: data " + host.data + " ready=" + dataReady + " android " + android.os.Build.VERSION.SDK_INT + " " + android.os.Build.MODEL);
         if (!dataReady) DataImport.prompt(this, host);
     }
 
@@ -180,13 +185,18 @@ public final class MainActivity extends Activity {
         }
         try {
             if (!booted) {
-                Boot.start(0);
-                Settings.apply();
-                controls.load(host);
-                controls.setVisible(Settings.showControls());
-                controls.onSettings = new Runnable() { public void run() { openSettings(); } };
-                startAudio();
+                // boot exactly once: a failure in one step must not restart the game every frame
                 booted = true;
+                bootNanos = System.nanoTime();
+                Diag.gameThread = Thread.currentThread();
+                try { Boot.start(0); } catch (Throwable e) { Diag.add("boot failed: " + e); cs.UnityEngine.Debug.logExceptionAnyThread(e); }
+                try { Settings.apply(); } catch (Throwable e) { Diag.add("settings: " + e); }
+                try {
+                    controls.load(host);
+                    controls.setVisible(Settings.showControls());
+                    controls.onSettings = new Runnable() { public void run() { openSettings(); } };
+                } catch (Throwable e) { Diag.add("controls: " + e); }
+                try { startAudio(); } catch (Throwable e) { Diag.add("audio: " + e); }
                 lastFrameNanos = System.nanoTime();
             }
             long now = System.nanoTime();
@@ -199,7 +209,14 @@ public final class MainActivity extends Activity {
             controls.draw(gfx);
             Eng.endOfFrame();
         } catch (Throwable e) {
+            Diag.add("frame: " + e);
             cs.UnityEngine.Debug.logExceptionAnyThread(e);
+        }
+        Diag.heartbeat = System.nanoTime();
+        if (!loadReported && booted && System.nanoTime() - bootNanos > 25000000000L) {
+            loadReported = true;
+            String sc = cs.UnityEngine.SceneManagement.SceneManager.GetActiveScene().get_name();
+            if ("SplashScreen".equals(sc) || "LoadModScreen".equals(sc)) Diag.showErrors("Still loading after 25 s (scene " + sc + ").");
         }
         sleepToFps();
     }
@@ -323,6 +340,8 @@ public final class MainActivity extends Activity {
         super.onResume();
         immersive();
         view.onResume();
+        Diag.paused = false;
+        Diag.heartbeat = System.nanoTime();
         if (booted) {
             Application.$setPaused(false);
             Application.$setFocus(true);
@@ -332,6 +351,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onPause() {
         super.onPause();
+        Diag.paused = true;
         controls.cancelAll();
         if (booted) {
             Application.$setFocus(false);

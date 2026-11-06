@@ -64,7 +64,7 @@ public class AudioSource extends AudioBehaviour {
 
     public void Play() {
         if (clip == null || !get_isActiveAndEnabled()) return;
-        clip.ensure();
+        clip.$request();
         synchronized (AudioMix.lock) {
             playingClip = clip;
             pos = pitch < 0 ? Math.max(0, clip.samples - 1) : 0;
@@ -82,7 +82,7 @@ public class AudioSource extends AudioBehaviour {
     public void PlayOneShot(AudioClip c) { PlayOneShot(c, 1f); }
     public void PlayOneShot(AudioClip c, float vol) {
         if (c == null || !get_isActiveAndEnabled()) return;
-        c.ensure();
+        c.$request();
         synchronized (AudioMix.lock) {
             oneShots.add(new Object[]{c, new double[]{0}, vol});
             AudioMix.add(this);

@@ -15,6 +15,7 @@ public final class Harness {
                 System.out.println(new String[]{"E", "A", "W", "I", "X"}[type] + " [" + Time.get_frameCount() + "] " + (msg.length() > 3000 ? msg.substring(0, 3000) : msg));
             }
             @Override public String dataPath() { return System.getProperty("prr.data"); }
+            @Override public boolean isMobile() { return Boolean.getBoolean("prr.mobile"); }
             @Override public String persistentDataPath() { return System.getProperty("prr.save", "/tmp/prr-save"); }
             @Override public Object[] decodeImage(byte[] data) {
                 try {

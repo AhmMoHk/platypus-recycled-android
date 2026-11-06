@@ -30,6 +30,7 @@ public final class AndroidHost extends Host {
     }
 
     @Override public void log(int type, String msg) {
+        if (type != 3) Diag.add((type == 0 || type == 4 ? "E " : type == 1 || type == 2 ? "W " : "I ") + (msg.length() > 600 ? msg.substring(0, 600) : msg));
         switch (type) {
             case 0: case 4: Log.e("prr", msg); break;
             case 1: case 2: Log.w("prr", msg); break;
