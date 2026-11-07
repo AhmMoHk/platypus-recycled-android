@@ -27,6 +27,8 @@
   - Video:  Quality (Low / Medium / High)  |  Screen (Original = 16:9 والباقي أسود، Fullscreen = 16:9 ممطوطة على كل الشاشة)
             |  FPS (30 / 60 / 90 / 120)
   - Gameplay > Controls (ونفسها بقائمة الإيقاف):  حجم أزرار اللمس، شفافيتها، شفافية زر الإيقاف.
+  - إذا ضلت اللعبة على 60 فريم بموبايل شاومي: الإعدادات > الشاشة > معدل التحديث > مخصص 120Hz، وشيل اللعبة من
+    Game Turbo إذا موجودة بيها.
 
 تحديث الحزمة على مشروع موجود (بدون تصدير من جديد، ثواني):  setup_project.bat -Update   ثم build_android.bat
 سجل اللعبة على الموبايل: Android/data/com.platypusport.reclayed/files/platypus_log.txt
@@ -62,14 +64,13 @@ What the port changes
       Overrides\Assets\PlatypusAndroid\Resources\1000045163.png  joystick ring, fixed, bottom-left
       Overrides\Assets\PlatypusAndroid\Resources\1000045164.png  joystick knob, 47.5% of the ring, 360 deg, springs back
       Overrides\Assets\PlatypusAndroid\Resources\1000045153.png  fire, bottom-right, tap or hold
-      Overrides\Assets\PlatypusAndroid\Resources\pause_button.png pause, just above player 1's lives (tap it; a finger
-                                                                    that lands on it and slides works the joystick)
+      Overrides\Assets\PlatypusAndroid\Resources\pause_button.png pause, top-right corner (tap)
     A held control turns darker and shrinks a little. Options > Gameplay > Controls (and the pause menu's options):
     Touch Controls Size 50-150% (default 100%), Touch Controls Opacity 10-100% (60%), Pause Button Opacity (70%).
     The mouse options (sensitivity, mouse hint, P2 mouse) are gone.
   - One player: player 2's HUD ("Press Fire To Join") and ship panel are gone. Ship screen: player 1 is in at once;
-    the ships stand in a row (chosen one big in the middle, neighbours smaller either side; all three of the game's
-    ships at once), the arrows / a tap on a neighbour / a gamepad slide the row (ship packs with more ships too);
+    the ships stand in a row (chosen one big, fully opaque, in the middle; neighbours smaller and see-through either
+    side; all three of the game's ships at once), the arrows / a tap on a neighbour / a gamepad slide the row (ship packs with more ships too);
     "Change Color" colours every ship in the row; the stats sit at the far left; Back returns to level select.
   - No controller glyphs in texts ("Change color O" -> "Change color").
   - Video options:
@@ -80,14 +81,22 @@ What the port changes
                stretches together and taps still land where they are drawn.
       FPS      30 / 60 / 90 / 120; the phone's display is switched to a matching refresh rate.
     No resolution, window mode or VSync rows.
-  - Smooth frames: no HDR buffers, incremental garbage collection, Android Frame Pacing, direct-to-screen drawing
-    where the phone allows it, buffered logging. The game already blends its 60-per-second logic between frames,
+  - Smooth frames: incremental garbage collection, Android Frame Pacing, buffered logging, no HDR buffer on Low.
+    The app is not filed as a game (android:isGame / appCategory), so phone game boosters do not hold it at 60 Hz;
+    the refresh rate is asked for through Unity, the window's display mode and the game surface, and again
+    whenever the display drops below it. The game already blends its 60-per-second logic between frames,
     so 90 / 120 FPS is real motion. The log gets a [Perf] line every 15 s (frame rate, slowest frame).
+  - Sprites: dynamic batching on (Unity bakes each sprite's colour, transparency and mirroring into its vertices,
+    which the game's shaders read; Unity 6 had it off), and animated sprites keep the texture of the picture they
+    show (Unity 6 drew a stale texture from the property block: clouds with the moon's texture, blue squares, odd
+    explosions).
   - A black backdrop is drawn first every frame (no leftover garbage / TV static around the intro films); the last
     picture of the Claymatic film stays behind the first loading bar, as on PC.
   - Asset bundles go into the APK as "<name>.unity3d", which Android stores uncompressed, so they load in place
     (Unity 6 compressed the bare names and loading the main menu took minutes). The build log lists how the biggest
     APK files are stored; a bundle that is still compressed is copied out on the first start instead.
   - While a loading screen is up Unity gets more time per frame for loading (shorter loads).
-  - Everything unlocked; Steam, achievements service and Workshop client removed (Workshop items are bundled).
+  - Progress as in the original: only level 1 open at first, Nasty locked until earned (Options > Unlock All Content
+    still opens everything). Reset Progress keeps the screen, quality and touch options.
+  - Steam, achievements service and Workshop client removed (Workshop items are bundled).
   - The game's six custom shaders rebuilt from its compiled shaders; real TextMeshPro shaders.

@@ -3,9 +3,11 @@
 //    something clears it, and the loading screen / intro film cameras never clear, which showed as TV-static
 //    noise and smeared "Loading" text around the Claymatic film. Everything outside the game's 16:9 picture is
 //    therefore pure black.
-//  - Every scene camera is drawn without HDR: the game has no post effects, so HDR only cost a full-screen float
-//    buffer and a copy per frame (a lot of memory traffic at 90-120 FPS on a phone).
-//  - Asks Android for a display refresh rate matching the FPS limit (phones keep apps at 60 Hz otherwise).
+//  - Quality Low draws the scene cameras without HDR (one full-screen float buffer and copy less per frame);
+//    Medium and High keep the game's own camera setup.
+//  - Asks Android for a display refresh rate matching the FPS limit (phones keep apps at 60 Hz otherwise): the
+//    window's preferred display mode and the game surface's frame rate, asked again whenever the display drops
+//    below it (another app, the system or a game booster may change it). [Perf] lines show the display's rate.
 //  - While a loading screen is up, Unity may spend more of each frame finishing loaded objects and uploading
 //    textures (the loading screen is still, so nothing visible suffers), which shortens loading.
 //  - Keeps the last picture of the Claymatic film on screen behind the loading bar, as the PC game does (there the
@@ -20,11 +22,14 @@ namespace PlatypusAndroid
     public class DisplayRunner : MonoBehaviour
     {
         static DisplayRunner instance;
-        static int wantedHz, appliedHz = -1;
-        static float refreshAt = -1f;
+        static int wantedHz, appliedHz = -1, reasks;
+        static float refreshAt = -1f, nextCheck = 5f;
+        /// <summary>The display's current refresh rate (0 = not known yet).</summary>
+        public static float CurrentHz { get; private set; }
         Camera backdrop;
-        int cameraCount = -1;
+        int cameraCount = -1, cameraLevel = -1;
         Camera[] cameras = new Camera[16];
+        readonly System.Collections.Generic.Dictionary<Camera, bool> sceneHdr = new System.Collections.Generic.Dictionary<Camera, bool>();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Boot()
@@ -53,24 +58,31 @@ namespace PlatypusAndroid
             backdrop.allowHDR = false;
             backdrop.allowMSAA = false;
             backdrop.rect = new Rect(0f, 0f, 1f, 1f);
-            SceneManager.sceneLoaded += (s, m) => cameraCount = -1;
+            SceneManager.sceneLoaded += (s, m) =>
+            {
+                cameraCount = -1;
+                var gone = new System.Collections.Generic.List<Camera>();
+                foreach (Camera c in sceneHdr.Keys) if (c == null) gone.Add(c);
+                foreach (Camera c in gone) sceneHdr.Remove(c);
+            };
         }
 
         void LateUpdate()
         {
-            int n = Camera.allCamerasCount;
-            if (n != cameraCount)
+            int n = Camera.allCamerasCount, level = Quality.LevelCached;
+            if (n != cameraCount || level != cameraLevel)
             {
                 cameraCount = n;
+                cameraLevel = level;
                 if (cameras.Length < n) cameras = new Camera[n + 8];
                 int got = Camera.GetAllCameras(cameras);
                 for (int i = 0; i < got; i++)
                 {
                     Camera c = cameras[i];
-                    if (c == null || c == backdrop) continue;
-                    c.allowHDR = false;
-                    c.allowMSAA = false;
                     cameras[i] = null;
+                    if (c == null || c == backdrop) continue;
+                    if (!sceneHdr.ContainsKey(c)) sceneHdr[c] = c.allowHDR;
+                    c.allowHDR = level > 0 && sceneHdr[c];
                 }
             }
             bool loading = LoadingScreen.IsLoading;
@@ -85,6 +97,36 @@ namespace PlatypusAndroid
             {
                 refreshAt = -1f;
                 ApplyRefreshRate(wantedHz);
+            }
+            if (Application.platform == RuntimePlatform.Android && Time.unscaledTime >= nextCheck)
+            {
+                nextCheck = Time.unscaledTime + 5f;
+                CheckRefreshRate();
+            }
+        }
+
+        void OnApplicationFocus(bool focus)
+        {
+            if (focus && wantedHz > 0) RequestRefreshRate(wantedHz, true);
+        }
+
+        /// <summary>Reads the display's refresh rate and asks again for the wanted one when it is lower.</summary>
+        static void CheckRefreshRate()
+        {
+            try
+            {
+                using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+                using (var wm = activity.Call<AndroidJavaObject>("getWindowManager"))
+                using (var display = wm.Call<AndroidJavaObject>("getDefaultDisplay"))
+                    CurrentHz = display.Call<float>("getRefreshRate");
+            }
+            catch (Exception) { return; }
+            if (wantedHz > 60 && CurrentHz > 0f && CurrentHz < wantedHz - 1f && refreshAt < 0f)
+            {
+                reasks++;
+                if (reasks <= 5 || reasks % 12 == 0) Debug.Log($"[Display] display at {CurrentHz:0} Hz, {wantedHz} wanted: asking again ({reasks})");
+                RequestRefreshRate(wantedHz, true);
             }
         }
 
@@ -163,6 +205,44 @@ namespace PlatypusAndroid
             catch (Exception e) { Debug.LogWarning("[Display] refresh rate: " + e.Message); }
         }
 
+        static AndroidJavaObject surfaceViewClass, viewGroupClass;
+        static int sdk = -1;
+
+        /// <summary>Surface.setFrameRate on every SurfaceView in the window (Unity draws into one), Android 11+.</summary>
+        static int SetSurfaceRate(AndroidJavaObject view, float hz, int depth)
+        {
+            if (view == null || depth > 12) return 0;
+            if (sdk < 0) using (var v = new AndroidJavaClass("android.os.Build$VERSION")) sdk = v.GetStatic<int>("SDK_INT");
+            if (sdk < 30) return 0;
+            if (surfaceViewClass == null)
+                using (var cls = new AndroidJavaClass("java.lang.Class"))
+                {
+                    surfaceViewClass = cls.CallStatic<AndroidJavaObject>("forName", "android.view.SurfaceView");
+                    viewGroupClass = cls.CallStatic<AndroidJavaObject>("forName", "android.view.ViewGroup");
+                }
+            int count = 0;
+            if (surfaceViewClass.Call<bool>("isInstance", view))
+            {
+                using (var holder = view.Call<AndroidJavaObject>("getHolder"))
+                using (var surface = holder.Call<AndroidJavaObject>("getSurface"))
+                {
+                    if (surface != null && surface.Call<bool>("isValid"))
+                    {
+                        if (sdk >= 31) surface.Call("setFrameRate", hz, 0, 1);   // FRAME_RATE_COMPATIBILITY_DEFAULT, CHANGE_FRAME_RATE_ALWAYS
+                        else surface.Call("setFrameRate", hz, 0);
+                        count++;
+                    }
+                }
+            }
+            if (viewGroupClass.Call<bool>("isInstance", view))
+            {
+                int n = view.Call<int>("getChildCount");
+                for (int i = 0; i < n; i++)
+                    using (var child = view.Call<AndroidJavaObject>("getChildAt", i)) count += SetSurfaceRate(child, hz, depth + 1);
+            }
+            return count;
+        }
+
         // Runs on Android's UI thread.
         static void SetDisplayMode(AndroidJavaObject activity, int fps)
         {
@@ -197,7 +277,10 @@ namespace PlatypusAndroid
                         lp.Set("preferredRefreshRate", bestHz);
                         window.Call("setAttributes", lp);
                     }
-                    Debug.Log($"[Display] {fps} FPS -> display mode {bestId} at {bestHz:0} Hz (modes:{list})");
+                    int surfaces = 0;
+                    using (var decor = window.Call<AndroidJavaObject>("getDecorView")) surfaces = SetSurfaceRate(decor, bestHz, 0);
+                    if (reasks <= 5)
+                        Debug.Log($"[Display] {fps} FPS -> display mode {bestId} at {bestHz:0} Hz, {surfaces} game surface(s) asked (modes:{list})");
                 }
             }
             catch (Exception e) { Debug.LogWarning("[Display] display mode: " + e.Message); }

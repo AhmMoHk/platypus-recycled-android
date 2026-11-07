@@ -27,7 +27,22 @@ namespace PlatypusAndroid
         public static int Level
         {
             get => Mathf.Clamp(Store.GetInt(Key, 2), 0, 2);        // an old "Ultra" (3) reads as High
-            set { Store.SetInt(Key, Mathf.Clamp(value, 0, 2)); Apply(); }
+            set { levelCache = Mathf.Clamp(value, 0, 2); Store.SetInt(Key, levelCache); Apply(); }
+        }
+
+        static int levelCache = -1;
+
+        /// <summary>The quality level without a store lookup (High until the save store is ready).</summary>
+        public static int LevelCached
+        {
+            get
+            {
+                if (levelCache >= 0) return levelCache;
+                // never touch Platform.Instance before the game has set up its platform (it would create a default one)
+                if (BasePlatformSystem.Instance == null || BasePlatformSystem.Instance.LocalStore == null) return 2;
+                try { levelCache = Level; } catch (Exception) { return 2; }
+                return levelCache;
+            }
         }
 
         /// <summary>false = Original (16:9 with black bars), true = Fullscreen (16:9 stretched over the screen).</summary>
@@ -116,7 +131,7 @@ namespace PlatypusAndroid
             h = Mathf.Max(2, Mathf.RoundToInt(rh * s / 2f) * 2);
         }
 
-        static int appliedW, appliedH;
+        static int appliedW, appliedH, appliedFps;
 
         public static void Apply()
         {
@@ -130,15 +145,28 @@ namespace PlatypusAndroid
 
             CaptureNative();
             TargetSize(level, Fullscreen, out int w, out int h);
-            if (appliedW == 0 && w == Screen.width && h == Screen.height) { appliedW = w; appliedH = h; }   // already so
-            if (w != appliedW || h != appliedH)
+            int fps = Application.targetFrameRate > 0 ? Application.targetFrameRate : 60;
+            if (w != appliedW || h != appliedH || fps != appliedFps)
             {
-                appliedW = w; appliedH = h;
-                Screen.SetResolution(w, h, FullScreenMode.FullScreenWindow);
-                DisplayRunner.RequestRefreshRate(Application.targetFrameRate, true);   // a new surface: ask again
-                Debug.Log($"[Display] drawing at {w}x{h} ({(Fullscreen ? "Fullscreen" : "Original")}, {Ids[level].Substring(15)}) on {nativeW}x{nativeH}");
+                // the size to draw at and the refresh rate wanted, both through Unity (it also picks the display mode);
+                // the display mode is asked for again directly a moment later (DisplayRunner)
+                appliedW = w; appliedH = h; appliedFps = fps;
+                Screen.SetResolution(w, h, FullScreenMode.FullScreenWindow, new RefreshRate { numerator = (uint)fps, denominator = 1 });
+                DisplayRunner.RequestRefreshRate(fps, true);
+                Debug.Log($"[Display] drawing at {w}x{h} ({(Fullscreen ? "Fullscreen" : "Original")}, {Ids[level].Substring(15)}) on {nativeW}x{nativeH}, {fps} FPS");
             }
-            DisplayRunner.RequestRefreshRate(Application.targetFrameRate);
+            else DisplayRunner.RequestRefreshRate(fps);
+        }
+
+        static readonly string[] OptionKeys = { Key, DisplayKey, "AndroidTouchSize", "AndroidTouchOpacity", "AndroidPauseOpacity" };
+
+        /// <summary>Runs <paramref name="wipe"/> (the game's Reset Progress) and puts the Android options back.</summary>
+        public static void KeepOptions(Action wipe)
+        {
+            var kept = new System.Collections.Generic.Dictionary<string, int>();
+            foreach (string k in OptionKeys) if (Store.HasKey(k)) kept[k] = Store.GetInt(k, 0);
+            wipe();
+            foreach (var kv in kept) Store.SetInt(kv.Key, kv.Value);
         }
 
         // ---- menu rows -------------------------------------------------------------------------------------------

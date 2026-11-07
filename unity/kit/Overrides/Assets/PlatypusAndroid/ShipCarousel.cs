@@ -21,7 +21,7 @@ namespace PlatypusAndroid
     public class ShipCarousel : MonoBehaviour
     {
         const float Side = 0.62f;          // neighbour size / chosen size
-        const float SideAlpha = 0.6f;      // neighbour opacity
+        const float SideAlpha = 0.6f;      // neighbour opacity (the chosen ship is fully opaque)
         const float SideShade = 0.8f;      // neighbour brightness
 
         class Slot
@@ -78,6 +78,14 @@ namespace PlatypusAndroid
             holder.SetParent(srt, false);
             holder.anchorMin = Vector2.zero; holder.anchorMax = Vector2.one;
             holder.offsetMin = holder.offsetMax = Vector2.zero;
+            // fixed drawing order through nested canvases: panel backdrop < ship row < stats / arrows / buttons < overlays
+            Canvas root = area.GetComponentInParent<Canvas>();
+            int order = root != null ? root.sortingOrder : 0, layer = root != null ? root.sortingLayerID : 0;
+            Layer(holder.gameObject, order + 1, layer);
+            if (panel.joinedOverlay != null) Layer(panel.joinedOverlay.gameObject, order + 2, layer);
+            if (panel.notJoinedOverlay != null) Layer(panel.notJoinedOverlay.gameObject, order + 3, layer);
+            if (panel.lockedInOverlay != null) Layer(panel.lockedInOverlay.gameObject, order + 3, layer);
+            shipShader = Resources.Load<Shader>("PlatypusMultiTintUI");
             for (int i = 0; i < slots.Length; i++) slots[i] = MakeSlot(i);
 
             // stats to the far left
@@ -90,6 +98,18 @@ namespace PlatypusAndroid
             return true;
         }
 
+        Shader shipShader;
+
+        static void Layer(GameObject go, int order, int sortingLayer)
+        {
+            Canvas c = go.GetComponent<Canvas>();
+            if (c == null) c = go.AddComponent<Canvas>();
+            c.overrideSorting = true;
+            c.sortingLayerID = sortingLayer;
+            c.sortingOrder = order;
+            if (go.GetComponent<GraphicRaycaster>() == null) go.AddComponent<GraphicRaycaster>();
+        }
+
         Slot MakeSlot(int i)
         {
             var go = new GameObject("Ship " + i, typeof(RectTransform));
@@ -99,7 +119,7 @@ namespace PlatypusAndroid
             s.rt.pivot = new Vector2(0.5f, 0.5f);
             s.img = go.AddComponent<Image>();
             s.img.preserveAspect = true;
-            s.mat = new Material(source.material);
+            s.mat = shipShader != null ? new Material(shipShader) : new Material(source.material);
             s.img.material = s.mat;
             s.button = go.AddComponent<Button>();
             s.button.transition = Selectable.Transition.None;
@@ -204,7 +224,7 @@ namespace PlatypusAndroid
                 int k = i - 2;
                 float o = b + k - pos;                                    // offset from the middle, in ships
                 float a = Mathf.Abs(o);
-                float alpha = a <= 1f ? Mathf.Lerp(1f, SideAlpha, a) : Mathf.Lerp(SideAlpha, 0f, a - 1f);
+                float alpha = a < 0.02f ? 1f : a <= 1f ? Mathf.Lerp(1f, SideAlpha, a) : Mathf.Lerp(SideAlpha, 0f, a - 1f);
                 if (count == 1 || forced) alpha = a < 0.5f ? 1f : 0f;
                 else if (count == 2 && o < 0f) alpha *= Mathf.Clamp01(1f + o);   // two ships: the neighbour is on the right
                 s.offset = o;
@@ -220,7 +240,7 @@ namespace PlatypusAndroid
                 float x = a <= 1f ? o * spacing : Mathf.Sign(o) * (spacing + (a - 1f) * spacing * 0.55f);
                 s.rt.anchoredPosition = new Vector2(x, y);
                 s.rt.sizeDelta = new Vector2(boxW, boxH) * scale;
-                float v = a <= 1f ? Mathf.Lerp(1f, SideShade, a) : SideShade;
+                float v = a < 0.02f ? 1f : a <= 1f ? Mathf.Lerp(1f, SideShade, a) : SideShade;
                 s.img.color = new Color(v, v, v, alpha);
                 s.button.interactable = canTap && a >= 0.5f && a < 1.6f;
                 newOrder = newOrder * 7 + Mathf.Clamp(Mathf.RoundToInt(a * 2f), 0, 6);

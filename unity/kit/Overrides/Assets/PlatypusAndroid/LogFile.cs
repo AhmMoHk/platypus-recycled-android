@@ -95,7 +95,7 @@ namespace PlatypusAndroid
             if (Time.unscaledTime < perfNext || perfTime <= 0f) return;
             perfNext = Time.unscaledTime + 15f;
             Debug.Log($"[Perf] {perfFrames / perfTime:0.0} FPS (target {target}), slowest frame {perfWorst * 1000f:0} ms, " +
-                      $"{perfHitches} long frames, drawing {Screen.width}x{Screen.height}; loading {LoadingScreen.IsLoading}; {LoadWatch.Scenes()}");
+                      $"{perfHitches} long frames, display {DisplayRunner.CurrentHz:0} Hz, drawing {Screen.width}x{Screen.height}; loading {LoadingScreen.IsLoading}; {LoadWatch.Scenes()}");
             perfFrames = perfHitches = 0; perfTime = perfWorst = 0f;
             if (!stateDumped && Time.unscaledTime > 40f) { stateDumped = true; State(); }
         }

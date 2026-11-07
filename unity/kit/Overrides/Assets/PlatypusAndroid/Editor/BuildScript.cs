@@ -116,7 +116,11 @@ namespace PlatypusAndroid.EditorTools
             // stack walks for ordinary log lines
             PlayerSettings.gcIncremental = true;
             PlayerSettings.Android.optimizedFramePacing = true;
-            PlayerSettings.Android.blitType = AndroidBlitType.Auto;
+            PlayerSettings.Android.blitType = AndroidBlitType.Always;     // the 2022 default: colours known to be right
+            EnableDynamicBatching();
+#pragma warning disable 618
+            PlayerSettings.Android.androidIsGame = false;   // not filed as a game: phone "game boosters" held it at 60 Hz
+#pragma warning restore 618
             PlayerSettings.SetMobileMTRendering(android, true);
             PlayerSettings.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
             PlayerSettings.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
@@ -232,6 +236,23 @@ namespace PlatypusAndroid.EditorTools
                 throw new Exception($"player build {report.summary.result}, {report.summary.totalErrors} errors (see the log)");
             Debug.Log($"[PlatypusAndroid] APK {new FileInfo(output).Length / (1024 * 1024)} MB");
             CheckApk(output);
+        }
+
+        /// <summary>Dynamic batching on for Android. With it Unity bakes each sprite's colour and flip into its vertices, which
+        /// the game's sprite shaders read; Unity 6 had it off, and sprites lost their tint, transparency and mirroring.</summary>
+        static void EnableDynamicBatching()
+        {
+            try
+            {
+                var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public;
+                var get = typeof(PlayerSettings).GetMethod("GetBatchingForPlatform", flags);
+                var set = typeof(PlayerSettings).GetMethod("SetBatchingForPlatform", flags);
+                object[] a = { BuildTarget.Android, 0, 0 };
+                get.Invoke(null, a);
+                set.Invoke(null, new object[] { BuildTarget.Android, (int)a[1], 1 });
+                Debug.Log($"[PlatypusAndroid] batching for Android: static {a[1]}, dynamic {a[2]} -> 1");
+            }
+            catch (Exception e) { Debug.LogWarning("[PlatypusAndroid] could not turn on dynamic batching: " + e.Message); }
         }
 
         /// <summary>Logs how the big files ended up in the APK: the bundles must be stored, not compressed.</summary>

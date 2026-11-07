@@ -2,12 +2,11 @@
 //  - joystick base  Resources/1000045163.png  (hollow red clay ring, fixed bottom-left)
 //  - joystick knob  Resources/1000045164.png  (blue clay disc, 47.5% of the ring, follows the thumb 360°, snaps back)
 //  - fire button    Resources/1000045153.png  (red ring + yellow crosshair + blue dot, bottom-right, tap / hold)
-//  - pause button   Resources/pause_button.png (red clay ring + two yellow bars), just above player 1's lives
+//  - pause button   Resources/pause_button.png (red clay ring + two yellow bars), top-right corner
 // Size and opacity come from Options > Gameplay > Controls (TouchSettings). A held control turns darker and
 // shrinks a little. Multi-touch with independent finger ids; input goes to the Rewired stand-in through
 // PlatypusAndroid.TouchInput. Positions are worked out in screen-glass pixels and converted to drawn pixels, so the
 // controls stay round when the Fullscreen screen option stretches the picture sideways.
-using System.Reflection;
 using Platypus.Core;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -34,10 +33,6 @@ namespace PlatypusAndroid
         Vector2 baseCenter, fireCenter, pauseCenter;        // glass pixels
         float baseR, knobR, maxRadius, fireR, pauseR, sx = 1f;
 
-        // player 1's lives counter in the HUD (the pause button sits just above it)
-        RectTransform livesGroup; Canvas livesCanvas; int livesScene = -1; float livesRetry;
-        static readonly FieldInfo playerIndexField = typeof(DisplayPlayerLives).GetField("m_playerIndex", BindingFlags.NonPublic | BindingFlags.Instance);
-        static readonly Vector3[] corners = new Vector3[4];
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
@@ -100,50 +95,6 @@ namespace PlatypusAndroid
 
         // ---- layout ------------------------------------------------------------------------------------------------
 
-        void FindLives()
-        {
-            Scene s = SceneManager.GetSceneByBuildIndex((int)BuildScenes.Gameplay);
-            int handle = s.handle;
-            if (livesScene == handle && (livesGroup != null || Time.unscaledTime < livesRetry)) return;
-            livesScene = handle;
-            livesRetry = Time.unscaledTime + 1f;
-            livesGroup = null;
-            foreach (DisplayPlayerLives d in FindObjectsOfType<DisplayPlayerLives>())
-            {
-                if (playerIndexField != null && (int)playerIndexField.GetValue(d) != 0) continue;
-                Transform g = d.transform.Find("Lives Counter");
-                livesGroup = (RectTransform)(g != null ? g : d.transform);
-                Canvas c = d.GetComponentInParent<Canvas>();
-                livesCanvas = c != null ? c.rootCanvas : null;
-                break;
-            }
-        }
-
-        /// <summary>The on-screen box (drawn pixels) of the visible parts of player 1's lives counter.</summary>
-        bool LivesRect(out Rect r)
-        {
-            r = default;
-            if (livesGroup == null || livesCanvas == null || !livesGroup.gameObject.activeInHierarchy) return false;
-            Camera cam = livesCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : livesCanvas.worldCamera;
-            float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
-            bool any = false;
-            for (int i = 0; i < livesGroup.childCount; i++)
-            {
-                var child = livesGroup.GetChild(i) as RectTransform;
-                if (child == null || !child.gameObject.activeInHierarchy) continue;
-                child.GetWorldCorners(corners);
-                for (int k = 0; k < 4; k++)
-                {
-                    Vector2 p = RectTransformUtility.WorldToScreenPoint(cam, corners[k]);
-                    x0 = Mathf.Min(x0, p.x); y0 = Mathf.Min(y0, p.y); x1 = Mathf.Max(x1, p.x); y1 = Mathf.Max(y1, p.y);
-                }
-                any = true;
-            }
-            if (!any) return false;
-            r = Rect.MinMaxRect(x0, y0, x1, y1);
-            return true;
-        }
-
         void Layout()
         {
             sx = Quality.Stretch;                                        // drawn pixel -> glass pixel, sideways
@@ -160,13 +111,7 @@ namespace PlatypusAndroid
             baseCenter = new Vector2(left + m + baseR, bottom + m + baseR);
             fireCenter = new Vector2(right - m - fireR, bottom + m + fireR);
 
-            FindLives();
-            if (LivesRect(out Rect lives))
-                pauseCenter = new Vector2((lives.xMin + lives.xMax) * 0.5f * sx, lives.yMax + unit * 0.015f + pauseR);
-            else
-                pauseCenter = new Vector2(left + m * 0.6f + pauseR, top - m * 0.6f - pauseR);   // no HUD yet: top-left
-            pauseCenter.x = Mathf.Clamp(pauseCenter.x, left + pauseR, right - pauseR);
-            pauseCenter.y = Mathf.Clamp(pauseCenter.y, bottom + pauseR, top - pauseR);
+            pauseCenter = new Vector2(right - m * 0.6f - pauseR, top - m * 0.6f - pauseR);   // top-right corner
         }
 
         void Place(RectTransform rt, Vector2 center, float diameter)
@@ -205,22 +150,22 @@ namespace PlatypusAndroid
                 bool ended = ph == TouchPhase.Ended || ph == TouchPhase.Canceled;
                 if (ph == TouchPhase.Began)
                 {
-                    if (pauseId == -2 && (p - pauseCenter).magnitude <= pauseR * 1.1f) { pauseId = id; pauseStart = p; pauseStartTime = Time.unscaledTime; }
+                    if (pauseId == -2 && (p - pauseCenter).magnitude <= pauseR * 1.4f) { pauseId = id; pauseStart = p; pauseStartTime = Time.unscaledTime; }
                     else if (fireId == -2 && (p - fireCenter).magnitude <= fireR * 1.5f) fireId = id;
                     else if (joyId == -2 && p.x < Screen.width * sx * 0.5f) joyId = id;
                 }
                 if (id == pauseId)
                 {
-                    // The pause button sits inside the joystick's half of the screen: a tap on it pauses, a finger
-                    // that lands on it and slides is the joystick.
+                    // a tap on it pauses (lift the finger on the button); sliding off cancels
                     if (ended)
                     {
                         pauseId = -2;
-                        if (ph == TouchPhase.Ended && Time.unscaledTime - pauseStartTime < 0.8f) { TouchInput.pause = true; pausePress = 1f; }
+                        if (ph == TouchPhase.Ended && (p - pauseCenter).magnitude <= pauseR * 1.6f && Time.unscaledTime - pauseStartTime < 1.2f)
+                        { TouchInput.pause = true; pausePress = 1f; }
                         continue;
                     }
-                    if ((p - pauseStart).magnitude > Screen.height * 0.04f && joyId == -2) { pauseId = -2; joyId = id; }
-                    else { pauseSeen = true; continue; }
+                    pauseSeen = true;
+                    continue;
                 }
                 if (id == joyId)
                 {
