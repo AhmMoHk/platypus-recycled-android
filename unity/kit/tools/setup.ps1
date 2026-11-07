@@ -273,7 +273,7 @@ $base = "http://127.0.0.1:$Port"
 function Post($path, [hashtable]$form) {
     $pairs = New-Object 'System.Collections.Generic.List[System.Collections.Generic.KeyValuePair[string,string]]'
     foreach ($k in $form.Keys) { $pairs.Add((New-Object 'System.Collections.Generic.KeyValuePair[string,string]' ($k, [string]$form[$k]))) }
-    $r = $http.PostAsync("$base$path", (New-Object System.Net.Http.FormUrlEncodedContent($pairs))).GetAwaiter().GetResult()
+    $r = $http.PostAsync("$base$path", [System.Net.Http.FormUrlEncodedContent]::new($pairs)).GetAwaiter().GetResult()
     if (-not $r.IsSuccessStatusCode) { throw "AssetRipper $path -> HTTP $([int]$r.StatusCode)" }
 }
 try {

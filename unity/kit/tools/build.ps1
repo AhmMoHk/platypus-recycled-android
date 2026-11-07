@@ -74,7 +74,7 @@ $uargs = @('-batchmode', '-quit', '-accept-apiupdate', '-projectPath', "`"$Proje
           '-astc', $Astc, '-output', "`"$apk`"", '-logFile', "`"$log`"")
 $proc = Start-Process -FilePath $Unity -ArgumentList $uargs -PassThru -WindowStyle Hidden
 $pos = 0L; $started = Get-Date
-$show = '\[PlatypusAndroid\]|error CS|Exception|BUILD FAILED|Build Finished|Importing|Compiling|Asset Pipeline Refresh|License'
+$show = '\[PlatypusAndroid\]|error CS|Shader error|Exception|BUILD FAILED|Build Finished|Importing|Compiling|Asset Pipeline Refresh|License'
 while ($true) {
     $done = $proc.HasExited
     if (Test-Path -LiteralPath $log) {
@@ -97,6 +97,12 @@ while ($true) {
 $code = $proc.ExitCode
 if ($code -ne 0 -or -not (Test-Path -LiteralPath $apk)) { Fail "the build failed (exit code $code). The full log: $log" }
 $mb = [Math]::Round((Get-Item -LiteralPath $apk).Length / 1MB)
+$shaderErrors = @(Select-String -LiteralPath $log -Pattern 'Shader error in' -ErrorAction SilentlyContinue | ForEach-Object { $_.Line.Trim() } | Select-Object -Unique)
+if ($shaderErrors.Count) {
+    Write-Host ""
+    Write-Host "  ! $($shaderErrors.Count) shader error(s) - send build_android.log:" -ForegroundColor Yellow
+    $shaderErrors | Select-Object -First 10 | ForEach-Object { Write-Host "    $_" -ForegroundColor Yellow }
+}
 Write-Host ""
 Write-Host "Done: $apk ($mb MB)" -ForegroundColor Green
 Write-Host "Copy it to the phone and install it (allow installing from this source). The first launch copies the mod files (about 400 MB) once."
