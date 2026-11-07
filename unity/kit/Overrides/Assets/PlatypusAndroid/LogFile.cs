@@ -95,13 +95,35 @@ namespace PlatypusAndroid
             if (Time.unscaledTime < perfNext || perfTime <= 0f) return;
             perfNext = Time.unscaledTime + 15f;
             Debug.Log($"[Perf] {perfFrames / perfTime:0.0} FPS (target {target}), slowest frame {perfWorst * 1000f:0} ms, " +
-                      $"{perfHitches} long frames, drawing {Screen.width}x{Screen.height}");
+                      $"{perfHitches} long frames, drawing {Screen.width}x{Screen.height}; loading {LoadingScreen.IsLoading}; {LoadWatch.Scenes()}");
             perfFrames = perfHitches = 0; perfTime = perfWorst = 0f;
+            if (!stateDumped && Time.unscaledTime > 40f) { stateDumped = true; State(); }
+        }
+
+        bool stateDumped;
+
+        /// <summary>What is on screen: every camera and every root canvas (for black / missing pictures).</summary>
+        static void State()
+        {
+            try
+            {
+                var sb = new StringBuilder("[State] cameras:");
+                foreach (Camera c in Camera.allCameras)
+                    sb.Append($"\n   {c.name} ({c.gameObject.scene.name}) depth {c.depth} clear {c.clearFlags} mask 0x{c.cullingMask:X} rect {c.rect} " +
+                              $"{(c.targetTexture != null ? "to texture " + c.targetTexture.name : "to screen")}");
+                sb.Append("\n  canvases:");
+                foreach (Canvas cv in FindObjectsOfType<Canvas>())
+                    if (cv.isRootCanvas && cv.isActiveAndEnabled)
+                        sb.Append($"\n   {cv.name} ({cv.gameObject.scene.name}) {cv.renderMode} order {cv.sortingOrder} camera {(cv.worldCamera != null ? cv.worldCamera.name : "-")}");
+                Debug.Log(sb.ToString());
+            }
+            catch (Exception e) { Debug.LogWarning("[State] " + e.Message); }
         }
 
         static void Share()
         {
             if (Application.platform != RuntimePlatform.Android || path == null) return;
+            State();
             Flush();
             try
             {

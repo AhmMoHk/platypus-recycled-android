@@ -51,7 +51,8 @@ with Android Build Support (SDK & NDK, OpenJDK), your copy of Platypus Reclayed,
       rebuild of the Platypus Reclayed / Platypus Original bundles, StreamingAssets index, APK.
       Prefers Unity 6 (no splash), else 2022.3. Log: %USERPROFILE%\PRA\build_android.log
 On the phone: Android/data/com.platypusport.reclayed/files/platypus_log.txt, or hold four fingers for two seconds
-to share it.
+to share it. Besides the game's own messages it has [Display] (screen, refresh rate), [Splash] (intro films), [Load]
+(loading steps and scene progress), [Perf] (frame rate every 15 s) and [State] (cameras and canvases) lines.
 
 What the port changes
   - Input: Rewired is replaced by a small stand-in (keyboard, any gamepad, touch). In menus a tap presses the button
