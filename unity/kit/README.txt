@@ -23,6 +23,11 @@
        - الناتج:  %USERPROFILE%\PRA\PlatypusReclayed.apk
   4) انقل الـ APK للموبايل ونصّبه. أول تشغيل ينسخ ملفات المودات (~400 MB) مرة وحدة بشريط التحميل مال اللعبة.
 
+الإعدادات الجديدة:
+  - Video:  Quality (Low / Medium / High)  |  Screen (Original = 16:9 والباقي أسود، Fullscreen = 16:9 ممطوطة على كل الشاشة)
+            |  FPS (30 / 60 / 90 / 120)
+  - Gameplay > Controls (ونفسها بقائمة الإيقاف):  حجم أزرار اللمس، شفافيتها، شفافية زر الإيقاف.
+
 تحديث الحزمة على مشروع موجود (بدون تصدير من جديد، ثواني):  setup_project.bat -Update   ثم build_android.bat
 سجل اللعبة على الموبايل: Android/data/com.platypusport.reclayed/files/platypus_log.txt
   أو حط 4 أصابع على الشاشة ثانيتين وتطلع قائمة مشاركة السجل.
@@ -52,15 +57,31 @@ What the port changes
   - Input: Rewired is replaced by a small stand-in (keyboard, any gamepad, touch). In menus a tap presses the button
     under the finger (finger down highlights it, finger up presses it; the game's Back / hint buttons too); the
     Android back gesture is Escape (back / pause). During play touches only drive the joystick, fire and pause.
-  - Clay touch controls, only while playing (hidden in menus, options, pause, level select):
+  - Clay touch controls, only while playing (hidden in menus, options, pause, level select), see-through:
       Overrides\Assets\PlatypusAndroid\Resources\1000045163.png  joystick ring, fixed, bottom-left
       Overrides\Assets\PlatypusAndroid\Resources\1000045164.png  joystick knob, 47.5% of the ring, 360 deg, springs back
-      Overrides\Assets\PlatypusAndroid\Resources\1000045153.png  fire, bottom-right, tap or hold, shrinks to 0.92
-      plus a Pause button (top-right) that opens the game's pause menu.
+      Overrides\Assets\PlatypusAndroid\Resources\1000045153.png  fire, bottom-right, tap or hold
+      Overrides\Assets\PlatypusAndroid\Resources\pause_button.png pause, just above player 1's lives (tap it; a finger
+                                                                    that lands on it and slides works the joystick)
+    A held control turns darker and shrinks a little. Options > Gameplay > Controls (and the pause menu's options):
+    Touch Controls Size 50-150% (default 100%), Touch Controls Opacity 10-100% (60%), Pause Button Opacity (70%).
+    The mouse options (sensitivity, mouse hint, P2 mouse) are gone.
+  - One player: player 2's HUD ("Press Fire To Join") and ship panel are gone. Ship screen: player 1 is in at once;
+    the ships stand in a row (chosen one big in the middle, neighbours smaller either side; all three of the game's
+    ships at once), the arrows / a tap on a neighbour / a gamepad slide the row (ship packs with more ships too);
+    "Change Color" colours every ship in the row; the stats sit at the far left; Back returns to level select.
   - No controller glyphs in texts ("Change color O" -> "Change color").
-  - Video options: Quality (Low / Medium / High / Ultra) and FPS 30 / 60 / 90 / 120 / 144; no resolution,
-    window mode or VSync.
+  - Video options:
+      Quality  Low / Medium / High - the size the game is drawn at (Low 70% and at most 720 lines, Medium 85% and at
+               most 1080 lines, High the screen's own size) and texture detail (Low: half-size where possible).
+      Screen   Original = the game's 16:9 picture, the rest of the screen pure black (films, menus and play alike).
+               Fullscreen = the same 16:9 picture stretched over the whole screen, as a PC emulator does; everything
+               stretches together and taps still land where they are drawn.
+      FPS      30 / 60 / 90 / 120; the phone's display is switched to a matching refresh rate.
+    No resolution, window mode or VSync rows.
+  - Smooth frames: no HDR buffers, incremental garbage collection, Android Frame Pacing, direct-to-screen drawing
+    where the phone allows it, buffered logging. The game already blends its 60-per-second logic between frames,
+    so 90 / 120 FPS is real motion. The log gets a [Perf] line every 15 s (frame rate, slowest frame).
+  - A black backdrop is drawn first every frame (no leftover garbage / TV static around the intro films).
   - Everything unlocked; Steam, achievements service and Workshop client removed (Workshop items are bundled).
   - The game's six custom shaders rebuilt from its compiled shaders; real TextMeshPro shaders.
-  - Any screen shape: the picture fills the whole screen (the view widens with the screen, nothing is stretched);
-    menus and the score stay in the game's own 16:9 frame. The intro films also fill the screen.

@@ -6,6 +6,7 @@ here: `patches.json` (exact text edits of the decompiled game code), the reconst
 
 - `setup_project.bat` / `tools/setup.ps1`: find the game, export it with AssetRipper 2.0.0, add the port, patch.
 - `build_android.bat` / `tools/build.ps1`: batch-mode Unity build of the APK.
-- `Overrides/`: the port's own code (Rewired stand-in, touch controls, mod-file installer, quality presets,
-  build script, import rules).
+- `Overrides/`: the port's own code (Rewired stand-in, touch controls and their options, mod-file installer,
+  video options with Original / Fullscreen screen modes and refresh-rate matching, black backdrop camera,
+  single-player ship row, build script, import rules).
 - `dev/`: the Linux compile-check loop used while writing the port (csc against the game's Managed DLLs).

@@ -2,6 +2,7 @@
 //  - written to Android/data/<package>/files/platypus_log.txt (the run before: platypus_log_prev.txt);
 //    reachable from Windows over USB (phone storage > Android > data > <package> > files)
 //  - hold four fingers on the screen for two seconds to share it (Telegram, mail, ...)
+//  - lines are buffered and written once a second (at once for errors), so logging never stalls a frame
 using System;
 using System.IO;
 using System.Text;
@@ -14,7 +15,9 @@ namespace PlatypusAndroid
         static StreamWriter writer;
         static readonly object gate = new object();
         static string path;
-        float holdStart = -1f;
+        static readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();   // usable from any thread
+        float holdStart = -1f, nextFlush;
+        int perfFrames, perfHitches; float perfTime, perfWorst, perfNext = 15f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Open()
@@ -25,7 +28,7 @@ namespace PlatypusAndroid
                 path = Path.Combine(dir, "platypus_log.txt");
                 string prev = Path.Combine(dir, "platypus_log_prev.txt");
                 if (File.Exists(path)) { if (File.Exists(prev)) File.Delete(prev); File.Move(path, prev); }
-                writer = new StreamWriter(new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.ReadWrite), new UTF8Encoding(false)) { AutoFlush = true };
+                writer = new StreamWriter(new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.ReadWrite), new UTF8Encoding(false)) { AutoFlush = false };
                 writer.WriteLine($"Platypus Reclayed Android {Application.version}  Unity {Application.unityVersion}  {SystemInfo.deviceModel}  " +
                                  $"Android {SystemInfo.operatingSystem}  {SystemInfo.graphicsDeviceName} ({SystemInfo.graphicsDeviceVersion})  " +
                                  $"RAM {SystemInfo.systemMemorySize} MB  {Screen.width}x{Screen.height}  {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
@@ -54,15 +57,26 @@ namespace PlatypusAndroid
                 try
                 {
                     string t = type == LogType.Log ? "" : type == LogType.Warning ? "W " : "E ";
-                    writer.WriteLine($"{Time.realtimeSinceStartup,8:0.00} {t}{message}");
-                    if ((type == LogType.Exception || type == LogType.Error) && !string.IsNullOrEmpty(stack)) writer.WriteLine(stack.TrimEnd());
+                    writer.WriteLine($"{clock.Elapsed.TotalSeconds,8:0.00} {t}{message}");
+                    if (type == LogType.Exception || type == LogType.Error || type == LogType.Assert)
+                    {
+                        if (!string.IsNullOrEmpty(stack)) writer.WriteLine(stack.TrimEnd());
+                        writer.Flush();
+                    }
                 }
                 catch { }
             }
         }
 
+        static void Flush() { if (writer == null) return; lock (gate) { try { writer.Flush(); } catch { } } }
+
+        void OnApplicationPause(bool paused) { if (paused) Flush(); }
+        void OnApplicationQuit() => Flush();
+
         void Update()
         {
+            if (Time.unscaledTime >= nextFlush) { nextFlush = Time.unscaledTime + 1f; Flush(); }
+            Perf();
             if (Input.touchCount >= 4)
             {
                 if (holdStart < 0f) holdStart = Time.unscaledTime;
@@ -71,9 +85,24 @@ namespace PlatypusAndroid
             else holdStart = -1f;
         }
 
+        /// <summary>Every 15 s: average frame rate, the slowest frame and how many frames took over twice the target.</summary>
+        void Perf()
+        {
+            float dt = Time.unscaledDeltaTime;
+            int target = Application.targetFrameRate > 0 ? Application.targetFrameRate : 60;
+            perfFrames++; perfTime += dt; perfWorst = Mathf.Max(perfWorst, dt);
+            if (dt > 2f / target) perfHitches++;
+            if (Time.unscaledTime < perfNext || perfTime <= 0f) return;
+            perfNext = Time.unscaledTime + 15f;
+            Debug.Log($"[Perf] {perfFrames / perfTime:0.0} FPS (target {target}), slowest frame {perfWorst * 1000f:0} ms, " +
+                      $"{perfHitches} long frames, drawing {Screen.width}x{Screen.height}");
+            perfFrames = perfHitches = 0; perfTime = perfWorst = 0f;
+        }
+
         static void Share()
         {
             if (Application.platform != RuntimePlatform.Android || path == null) return;
+            Flush();
             try
             {
                 string text;

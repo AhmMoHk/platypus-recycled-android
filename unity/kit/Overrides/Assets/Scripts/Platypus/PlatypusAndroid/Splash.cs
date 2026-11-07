@@ -2,7 +2,7 @@
 // On PC they start paused (playback speed 0) while the game loads and are un-paused later. Android's video decoder
 // does not hold a film at speed 0, so the intro ran on, unseen, during loading and appeared late, half or not at
 // all. Here both films are only prepared while loading and are started from their first frame when their turn
-// comes, and they fill the whole screen (cropping the edges) instead of sitting inside black bars.
+// comes. They keep the game's own framing (the whole film, black around it on a wider screen).
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Video;
@@ -17,7 +17,6 @@ namespace PlatypusAndroid
             {
                 if (v == null) continue;
                 v.playOnAwake = false;
-                v.aspectRatio = VideoAspectRatio.FitOutside;
                 v.skipOnDrop = true;
                 v.waitForFirstFrame = true;
             }

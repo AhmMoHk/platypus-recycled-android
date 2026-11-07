@@ -60,7 +60,7 @@ function Apply-Port {
     Say 'Adding the Android port (input, clay touch controls, shaders, build script)'
     & robocopy (Join-Path $Kit 'Overrides') "$Project" /E /NFL /NDL /NJH /NJS /NP /R:1 /W:1 | Out-Null
     if ($LASTEXITCODE -ge 8) { Fail "copying Overrides failed (robocopy $LASTEXITCODE)" }
-    foreach ($png in @('1000045163.png', '1000045164.png', '1000045153.png')) {
+    foreach ($png in @('1000045163.png', '1000045164.png', '1000045153.png', 'pause_button.png')) {
         if (-not (Test-Path -LiteralPath (Join-Path $Assets "PlatypusAndroid\Resources\$png"))) { Fail "touch control image missing: $png" }
     }
 
@@ -72,7 +72,7 @@ function Apply-Port {
         if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Recurse -Force }
         if (Test-Path -LiteralPath "$f.meta") { Remove-Item -LiteralPath "$f.meta" -Force }
     }
-    $bad = 0; $already = 0
+    $bad = 0; $already = 0; $updated = 0
     foreach ($e in $P.patches) {
         $f = Join-Path $Scripts $e.file
         if (-not (Test-Path -LiteralPath $f)) { Warn "missing file $($e.file)"; $bad++; continue }
@@ -80,11 +80,14 @@ function Apply-Port {
         $want = if ($e.PSObject.Properties['count']) { [int]$e.count } else { 1 }
         $n = ([regex]::Matches($s, [regex]::Escape($e.old))).Count
         if ($e.new -and $s.Contains($e.new)) { $already++; continue }                 # applied by an earlier run
+        $prev = $null                                                                # applied by an earlier kit, in an older form
+        if ($e.PSObject.Properties['was']) { foreach ($w in $e.was) { if ($w -and $s.Contains($w)) { $prev = $w; break } } }
+        if ($null -ne $prev) { [IO.File]::WriteAllText($f, $s.Replace($prev, $e.new), $utf8); $updated++; continue }
         if ($n -eq 0 -and -not $e.new) { $already++; continue }
         if ($n -ne $want) { Warn ("patch not applied ({0} matches, expected {1}): {2}: {3}" -f $n, $want, $e.file, $e.old.Substring(0, [Math]::Min(60, $e.old.Length))); $bad++; continue }
         [IO.File]::WriteAllText($f, $s.Replace($e.old, $e.new), $utf8)
     }
-    Note ("{0}/{1} patches applied ({2} were already in place)" -f ($P.patches.Count - $bad), $P.patches.Count, $already)
+    Note ("{0}/{1} patches applied ({2} were already in place, {3} updated from an earlier kit)" -f ($P.patches.Count - $bad), $P.patches.Count, $already, $updated)
     if ($bad) { Fail 'some patches did not apply: this export differs from the one the kit was made for (game update?)' }
 
 }

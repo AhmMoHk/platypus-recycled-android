@@ -85,8 +85,8 @@ namespace PlatypusAndroid.EditorTools
             PlayerSettings.productName = "Platypus Reclayed";
             if (string.IsNullOrEmpty(PlayerSettings.companyName) || PlayerSettings.companyName == "DefaultCompany") PlayerSettings.companyName = "Platypus Port";
             PlayerSettings.SetApplicationIdentifier(android, "com.platypusport.reclayed");
-            PlayerSettings.bundleVersion = "1.0";
-            PlayerSettings.Android.bundleVersionCode = 1;
+            PlayerSettings.bundleVersion = "1.4";
+            PlayerSettings.Android.bundleVersionCode = 4;
 
             PlayerSettings.SetScriptingBackend(android, ScriptingImplementation.IL2CPP);
             PlayerSettings.SetIl2CppCompilerConfiguration(android, Il2CppCompilerConfiguration.Release);
@@ -111,6 +111,15 @@ namespace PlatypusAndroid.EditorTools
             PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
             PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.OpenGLES3 });
             PlayerSettings.runInBackground = false;
+            // smooth frames: garbage collection in small slices instead of pauses, even frame times at the chosen FPS
+            // (Android Frame Pacing), drawing straight to the screen when the phone allows it (no extra copy), and no
+            // stack walks for ordinary log lines
+            PlayerSettings.gcIncremental = true;
+            PlayerSettings.Android.optimizedFramePacing = true;
+            PlayerSettings.Android.blitType = AndroidBlitType.Auto;
+            PlayerSettings.SetMobileMTRendering(android, true);
+            PlayerSettings.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+            PlayerSettings.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
             // No "Made with Unity": Unity 6 lets a Personal licence switch the splash off. Unity 2022 Personal always
             // shows it, whatever this says (the build then logs a warning).
             PlayerSettings.SplashScreen.show = false;
