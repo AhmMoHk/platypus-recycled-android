@@ -49,9 +49,9 @@ On the phone: Android/data/com.platypusport.reclayed/files/platypus_log.txt, or 
 to share it.
 
 What the port changes
-  - Input: Rewired is replaced by a small stand-in (keyboard, any gamepad, touch). In menus the touch screen is the
-    game's own mouse control (tap = click, the game's Back / hint buttons are tappable); the Android back gesture is
-    Escape (back / pause).
+  - Input: Rewired is replaced by a small stand-in (keyboard, any gamepad, touch). In menus a tap presses the button
+    under the finger (finger down highlights it, finger up presses it; the game's Back / hint buttons too); the
+    Android back gesture is Escape (back / pause). During play touches only drive the joystick, fire and pause.
   - Clay touch controls, only while playing (hidden in menus, options, pause, level select):
       Overrides\Assets\PlatypusAndroid\Resources\1000045163.png  joystick ring, fixed, bottom-left
       Overrides\Assets\PlatypusAndroid\Resources\1000045164.png  joystick knob, 47.5% of the ring, 360 deg, springs back
@@ -62,5 +62,5 @@ What the port changes
     window mode or VSync.
   - Everything unlocked; Steam, achievements service and Workshop client removed (Workshop items are bundled).
   - The game's six custom shaders rebuilt from its compiled shaders; real TextMeshPro shaders.
-  - Any screen shape: the game keeps its 16:9 picture (4:3 for Platypus Original) with bars, never stretched;
-    the touch controls use the whole screen (safe area).
+  - Any screen shape: the picture fills the whole screen (the view widens with the screen, nothing is stretched);
+    menus and the score stay in the game's own 16:9 frame. The intro films also fill the screen.

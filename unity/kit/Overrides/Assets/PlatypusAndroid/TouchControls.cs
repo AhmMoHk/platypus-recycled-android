@@ -14,13 +14,18 @@ namespace PlatypusAndroid
     [DefaultExecutionOrder(-32100)]   // before the input stand-in samples, so a touch acts in the same frame
     public class TouchControls : MonoBehaviour
     {
-        const float BaseSize = 0.42f;     // ring diameter, fraction of the screen height
+        const float BaseSize = 0.48f;     // ring diameter, fraction of the screen height
         const float KnobScale = 0.475f;   // knob diameter / ring diameter
-        const float FireSize = 0.27f;     // fire button diameter, fraction of the screen height
-        const float PauseSize = 0.11f;
+        const float FireSize = 0.34f;     // fire button diameter, fraction of the screen height
+        const float PauseSize = 0.12f;
+        const float PressScale = 0.92f;   // a held control shrinks a little ...
+        static readonly Color Idle = new Color(1f, 1f, 1f, 1f);
+        static readonly Color Held = new Color(0.62f, 0.62f, 0.62f, 1f);   // ... and its clay turns darker
 
         Canvas canvas;
         RectTransform baseRt, knobRt, fireRt, pauseRt;
+        RawImage baseImg, knobImg, fireImg, pauseImg;
+        float knobPress, firePress, pausePress;             // 0 = idle .. 1 = held, eased
         int joyId = -2, fireId = -2;
         Vector2 baseCenter, fireCenter, pauseCenter;
         float baseR, knobR, maxRadius, fireR, pauseR;
@@ -43,6 +48,8 @@ namespace PlatypusAndroid
             knobRt = MakeImage("JoystickKnob", "1000045164");
             fireRt = MakeImage("FireButton", "1000045153");
             pauseRt = MakePause();
+            baseImg = baseRt.GetComponent<RawImage>(); knobImg = knobRt.GetComponent<RawImage>();
+            fireImg = fireRt.GetComponent<RawImage>(); pauseImg = pauseRt.GetComponent<RawImage>();
             SetVisible(false);
         }
 
@@ -117,8 +124,7 @@ namespace PlatypusAndroid
             pauseCenter = new Vector2(safe.xMax - m * 0.6f - pauseR, safe.yMax - m * 0.6f - pauseR);
             float s = canvas.scaleFactor > 0 ? 1f / canvas.scaleFactor : 1f;
             Place(baseRt, baseCenter, baseR * 2, s);
-            Place(fireRt, fireCenter, fireR * 2 * (fireId >= -1 ? 0.92f : 1f), s);
-            Place(pauseRt, pauseCenter, pauseR * 2, s);
+            Place(pauseRt, pauseCenter, pauseR * 2 * Mathf.Lerp(1f, PressScale, pausePress), s);
         }
 
         static void Place(RectTransform rt, Vector2 center, float size, float s)
@@ -147,7 +153,7 @@ namespace PlatypusAndroid
                 bool ended = ph == TouchPhase.Ended || ph == TouchPhase.Canceled;
                 if (ph == TouchPhase.Began)
                 {
-                    if ((p - pauseCenter).magnitude <= pauseR * 1.3f) { TouchInput.pause = true; continue; }
+                    if ((p - pauseCenter).magnitude <= pauseR * 1.3f) { TouchInput.pause = true; pausePress = 1f; continue; }
                     if (fireId == -2 && (p - fireCenter).magnitude <= fireR * 1.5f) fireId = id;
                     else if (joyId == -2 && p.x < Screen.width * 0.5f) joyId = id;
                 }
@@ -170,10 +176,21 @@ namespace PlatypusAndroid
             TouchInput.x = maxRadius > 0 ? knob.x / maxRadius : 0;
             TouchInput.y = maxRadius > 0 ? knob.y / maxRadius : 0;
             TouchInput.fire = fireId != -2;
+            // press feedback: eased in ~50 ms, out ~120 ms
+            float dt = Time.unscaledDeltaTime;
+            knobPress = Ease(knobPress, joyId != -2, dt);
+            firePress = Ease(firePress, TouchInput.fire, dt);
+            pausePress = Ease(pausePress, false, dt);
             float s = canvas.scaleFactor > 0 ? 1f / canvas.scaleFactor : 1f;
-            Place(knobRt, baseCenter + knob, knobR * 2, s);
-            Place(fireRt, fireCenter, fireR * 2 * (TouchInput.fire ? 0.92f : 1f), s);
+            Place(knobRt, baseCenter + knob, knobR * 2 * Mathf.Lerp(1f, PressScale, knobPress), s);
+            Place(fireRt, fireCenter, fireR * 2 * Mathf.Lerp(1f, PressScale, firePress), s);
+            knobImg.color = Color.Lerp(Idle, Held, knobPress);
+            baseImg.color = Color.Lerp(Idle, Held, knobPress * 0.5f);
+            fireImg.color = Color.Lerp(Idle, Held, firePress);
+            pauseImg.color = Color.Lerp(Idle, Held, pausePress);
         }
+
+        static float Ease(float v, bool held, float dt) => Mathf.MoveTowards(v, held ? 1f : 0f, dt * (held ? 20f : 8f));
 
         void OnApplicationPause(bool paused) { if (paused) Release(); }
     }

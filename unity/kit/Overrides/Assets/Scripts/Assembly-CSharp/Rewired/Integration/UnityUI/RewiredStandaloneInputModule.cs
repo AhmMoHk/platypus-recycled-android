@@ -1,5 +1,6 @@
-// UGUI input module: taps and mouse go to UI elements directly; keyboard / gamepad / touch-control navigation
-// comes from the system player of RewiredFacade (UIHorizontal, UIVertical, UISubmit, UICancel).
+// UGUI input module of the port: keyboard / gamepad navigation comes from the system player of RewiredFacade
+// (UIHorizontal, UIVertical, UISubmit, UICancel); a PC mouse works as in uGUI; on a phone every touch goes through
+// PlatypusAndroid.TouchUI (tap = press the button under the finger).
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -13,21 +14,6 @@ namespace Rewired.Integration.UnityUI
         public bool useRewiredSystemPlayer = true;
         public bool moveOneElementPerAxisPress = true;
 
-        sealed class FacadeInput : BaseInput
-        {
-            static Player P => ReInput.players.SystemPlayer;
-            public override float GetAxisRaw(string axisName)
-            {
-                if (axisName == "UIHorizontal" || axisName == "UIVertical") return P.GetAxisRaw(axisName);
-                return base.GetAxisRaw(axisName);
-            }
-            public override bool GetButtonDown(string buttonName)
-            {
-                if (buttonName == "UISubmit" || buttonName == "UICancel") return P.GetButtonDown(buttonName);
-                return base.GetButtonDown(buttonName);
-            }
-        }
-
         protected override void Awake()
         {
             base.Awake();
@@ -35,9 +21,19 @@ namespace Rewired.Integration.UnityUI
             verticalAxis = "UIVertical";
             submitButton = "UISubmit";
             cancelButton = "UICancel";
-            inputOverride = gameObject.AddComponent<FacadeInput>();
+            var ui = GetComponent<PlatypusAndroid.UIInput>();
+            inputOverride = ui != null ? ui : gameObject.AddComponent<PlatypusAndroid.UIInput>();
+            if (PlatypusAndroid.TouchUI.Active) Input.simulateMouseWithTouches = false;   // touches are not a second, fake mouse
         }
 
         public override bool IsModuleSupported() => true;
+
+        public override bool ShouldActivateModule() => base.ShouldActivateModule() || (PlatypusAndroid.TouchUI.Active && Input.touchCount > 0);
+
+        public override void Process()
+        {
+            base.Process();
+            if (PlatypusAndroid.TouchUI.Active) PlatypusAndroid.TouchUI.Process(eventSystem);
+        }
     }
 }

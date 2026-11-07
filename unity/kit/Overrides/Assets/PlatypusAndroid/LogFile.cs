@@ -41,6 +41,9 @@ namespace PlatypusAndroid
             DontDestroyOnLoad(go);
             go.hideFlags = HideFlags.HideInHierarchy;
             go.AddComponent<LogFile>();
+            var d = Display.main;
+            Debug.Log($"[Display] screen {Screen.width}x{Screen.height} dpi {Screen.dpi:0} safe {Screen.safeArea} rendering {d.renderingWidth}x{d.renderingHeight} " +
+                      $"system {d.systemWidth}x{d.systemHeight} colour space {QualitySettings.activeColorSpace} {SystemInfo.graphicsDeviceType}");
         }
 
         static void Write(string message, string stack, LogType type)

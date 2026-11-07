@@ -10,11 +10,9 @@ namespace PlatypusAndroid
     {
         public static readonly string[] FpsOptions = { "30", "60", "90", "120", "144" };
         static readonly string[] Ids = { "Options.QualityLow", "Options.QualityMedium", "Options.QualityHigh", "Options.QualityUltra" };
-        static readonly int[] MaxLines = { 720, 1080, 1440, int.MaxValue };     // render height cap per level
         static readonly int[] Msaa = { 0, 0, 2, 4 };
-        static readonly int[] MipLimit = { 1, 0, 0, 0 };
+        static readonly int[] MipLimit = { 2, 1, 0, 0 };           // Low: quarter-size textures, Medium: half
         const string Key = "AndroidQuality";
-        static int nativeW, nativeH;
 
         static PlatformStore Store => Platform.Instance.LocalStore;
 
@@ -34,22 +32,13 @@ namespace PlatypusAndroid
 
         public static void Apply()
         {
+            // No resolution change: the game always renders at the screen's own size (changing it at run time
+            // risks touches and picture disagreeing). The levels trade texture detail and edge smoothing.
             int level = Level;
-            if (nativeW == 0)
-            {
-                int a = Display.main.systemWidth, b = Display.main.systemHeight;
-                nativeW = Mathf.Max(a, b); nativeH = Mathf.Min(a, b);       // the game runs in landscape
-            }
             QualitySettings.vSyncCount = 0;
             QualitySettings.antiAliasing = Msaa[level];
             QualitySettings.globalTextureMipmapLimit = MipLimit[level];
-            QualitySettings.anisotropicFiltering = level >= 2 ? AnisotropicFiltering.Enable : AnisotropicFiltering.Disable;
-            if (Application.isMobilePlatform && nativeH > 0)
-            {
-                float k = Mathf.Min(1f, MaxLines[level] / (float)nativeH);
-                int w = Mathf.RoundToInt(nativeW * k), h = Mathf.RoundToInt(nativeH * k);
-                if (Screen.width != w || Screen.height != h) Screen.SetResolution(w, h, FullScreenMode.FullScreenWindow);
-            }
+            QualitySettings.anisotropicFiltering = level >= 2 ? AnisotropicFiltering.ForceEnable : AnisotropicFiltering.Disable;
         }
 
         /// <summary>Turns the original Resolution row into the Quality row.</summary>

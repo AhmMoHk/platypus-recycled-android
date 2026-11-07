@@ -100,6 +100,7 @@ namespace PlatypusAndroid.EditorTools
             PlayerSettings.Android.forceInternetPermission = false;
             PlayerSettings.Android.startInFullscreen = true;
             PlayerSettings.Android.renderOutsideSafeArea = true;
+            PlayerSettings.Android.maxAspectRatio = 3f;                // up to 3:1, so Android adds no bars of its own
             PlayerSettings.Android.useCustomKeystore = false;      // Unity's debug key (v1 + v2 signature), fine to sideload
 
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
