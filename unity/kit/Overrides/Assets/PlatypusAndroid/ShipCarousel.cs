@@ -8,6 +8,9 @@
 //    when you switch ships).
 //  - The ship's stats sit at the far left.
 // The game's own preview image is hidden and used as the material template; the panel logic is the game's.
+// The row has its own canvas group that ignores the panel's fading groups (only the screen's own fade applies), and
+// the "not joined" / "locked in" veils stay behind it, so the chosen ship is drawn fully opaque in its real colours.
+// A [Ships] log line tells what the row is drawn with (alphas, canvases, shader) in case it still looks wrong.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -82,9 +85,10 @@ namespace PlatypusAndroid
             Canvas root = area.GetComponentInParent<Canvas>();
             int order = root != null ? root.sortingOrder : 0, layer = root != null ? root.sortingLayerID : 0;
             Layer(holder.gameObject, order + 1, layer);
-            if (panel.joinedOverlay != null) Layer(panel.joinedOverlay.gameObject, order + 2, layer);
-            if (panel.notJoinedOverlay != null) Layer(panel.notJoinedOverlay.gameObject, order + 3, layer);
-            if (panel.lockedInOverlay != null) Layer(panel.lockedInOverlay.gameObject, order + 3, layer);
+            if (panel.joinedOverlay != null) Layer(panel.joinedOverlay.gameObject, order + 2, layer);   // stats, arrows, buttons
+            rowGroup = hgo.AddComponent<CanvasGroup>();
+            rowGroup.ignoreParentGroups = true;
+            screenGroup = root != null ? root.rootCanvas.GetComponent<CanvasGroup>() : null;
             shipShader = Resources.Load<Shader>("PlatypusMultiTintUI");
             for (int i = 0; i < slots.Length; i++) slots[i] = MakeSlot(i);
 
@@ -99,6 +103,9 @@ namespace PlatypusAndroid
         }
 
         Shader shipShader;
+        CanvasGroup rowGroup, screenGroup;
+        float nextLog;
+        int logs;
 
         static void Layer(GameObject go, int order, int sortingLayer)
         {
@@ -191,6 +198,8 @@ namespace PlatypusAndroid
         {
             int count = ships.Length;
             if (count == 0) return;
+            if (rowGroup != null) rowGroup.alpha = screenGroup != null ? screenGroup.alpha : 1f;
+            if (Time.unscaledTime >= nextLog && logs < 4) { nextLog = Time.unscaledTime + 5f; logs++; LogState(); }
             bool forced = !string.IsNullOrEmpty(Globals.forceShipChoice);
 
             // follow the game's choice (arrows, gamepad, a tap on a neighbour)
@@ -254,6 +263,27 @@ namespace PlatypusAndroid
                 int at = 0;
                 foreach (Slot sl in byDistance) sl.rt.SetSiblingIndex(at++);
             }
+        }
+
+        void LogState()
+        {
+            var sb = new System.Text.StringBuilder("[Ships] timeScale " + Time.timeScale.ToString("0.##"));
+            for (Transform t = holder; t != null; t = t.parent)
+            {
+                CanvasGroup g = t.GetComponent<CanvasGroup>();
+                Canvas c = t.GetComponent<Canvas>();
+                if (g != null) sb.Append($" | {t.name}: group {g.alpha:0.##}{(g.ignoreParentGroups ? " (own)" : "")}");
+                if (c != null) sb.Append($" | {t.name}: canvas {c.renderMode} order {c.sortingOrder}{(c.overrideSorting ? " (override)" : "")}");
+            }
+            Slot mid = null;
+            foreach (Slot sl in slots) if (sl != null && sl.rt.gameObject.activeSelf && (mid == null || Mathf.Abs(sl.offset) < Mathf.Abs(mid.offset))) mid = sl;
+            if (mid != null)
+                sb.Append($" | middle {mid.key} colour {mid.img.color} shader {(mid.img.materialForRendering != null ? mid.img.materialForRendering.shader.name : "none")}" +
+                          $" sprite {(mid.img.sprite != null ? mid.img.sprite.name : "none")}");
+            if (panel.notJoinedOverlay != null) sb.Append($" | notJoined {panel.notJoinedOverlay.alpha:0.##}");
+            if (panel.lockedInOverlay != null) sb.Append($" | lockedIn {panel.lockedInOverlay.alpha:0.##}");
+            if (panel.shipPreviewOverlay != null) sb.Append($" | preview {panel.shipPreviewOverlay.alpha:0.##}");
+            Debug.Log(sb.ToString());
         }
 
         ShipData FindShip(string name)
