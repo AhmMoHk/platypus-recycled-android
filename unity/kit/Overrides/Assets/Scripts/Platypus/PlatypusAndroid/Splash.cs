@@ -37,6 +37,7 @@ namespace PlatypusAndroid
             v.Play();
             until = Time.realtimeSinceStartup + 3f;
             while (v.frame < 0 && Time.realtimeSinceStartup < until) yield return null;   // the first frame is on screen
+            DisplayRunner.ReleaseFrame();                                                   // the film covers the held picture
             VideoClip c = v.clip;
             Debug.Log($"[Splash] {v.name}: {(c != null ? c.name : "no clip")} prepared {v.isPrepared} after {Time.realtimeSinceStartup - start:0.0}s, " +
                       $"player {v.length:0.00}s / {v.frameCount} frames, clip {(c != null ? c.length : 0):0.00}s / {(c != null ? c.frameCount : 0)} frames, " +

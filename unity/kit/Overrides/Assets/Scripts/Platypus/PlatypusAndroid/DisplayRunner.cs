@@ -6,9 +6,14 @@
 //  - Every scene camera is drawn without HDR: the game has no post effects, so HDR only cost a full-screen float
 //    buffer and a copy per frame (a lot of memory traffic at 90-120 FPS on a phone).
 //  - Asks Android for a display refresh rate matching the FPS limit (phones keep apps at 60 Hz otherwise).
+//  - While a loading screen is up, Unity may spend more of each frame finishing loaded objects and uploading
+//    textures (the loading screen is still, so nothing visible suffers), which shortens loading.
+//  - Keeps the last picture of the Claymatic film on screen behind the loading bar, as the PC game does (there the
+//    camera simply never clears, which on a phone shows garbage instead).
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Video;
 
 namespace PlatypusAndroid
 {
@@ -31,8 +36,13 @@ namespace PlatypusAndroid
             instance = go.AddComponent<DisplayRunner>();
         }
 
+        static RenderTexture held;
+        static Material heldMat;
+        static float heldAspect = 16f / 9f;
+
         void Awake()
         {
+            QualitySettings.asyncUploadBufferSize = 32;          // MB: big textures upload without resizing the buffer
             backdrop = gameObject.AddComponent<Camera>();
             backdrop.depth = -1000f;                       // before every game camera
             backdrop.clearFlags = CameraClearFlags.SolidColor;
@@ -63,11 +73,69 @@ namespace PlatypusAndroid
                     cameras[i] = null;
                 }
             }
+            bool loading = LoadingScreen.IsLoading;
+            ThreadPriority prio = loading ? ThreadPriority.High : ThreadPriority.BelowNormal;
+            if (Application.backgroundLoadingPriority != prio)
+            {
+                Application.backgroundLoadingPriority = prio;
+                QualitySettings.asyncUploadTimeSlice = loading ? 8 : 2;   // ms per frame
+            }
+            if (!loading && held != null) ReleaseFrame();
             if (refreshAt >= 0f && Time.unscaledTime >= refreshAt)
             {
                 refreshAt = -1f;
                 ApplyRefreshRate(wantedHz);
             }
+        }
+
+        /// <summary>Keeps the film's current picture on screen (drawn by the backdrop, under everything else) until
+        /// <see cref="ReleaseFrame"/> or the end of loading.</summary>
+        public static void HoldFrame(VideoPlayer v)
+        {
+            try
+            {
+                Texture t = v != null ? v.texture : null;
+                if (t == null || t.width <= 0 || t.height <= 0) return;
+                if (held == null || held.width != t.width || held.height != t.height)
+                {
+                    ReleaseFrame();
+                    held = new RenderTexture(t.width, t.height, 0) { name = "Held film frame" };
+                }
+                Graphics.Blit(t, held);
+                heldAspect = (float)t.width / t.height;
+                if (heldMat == null) heldMat = new Material(Canvas.GetDefaultCanvasMaterial());
+            }
+            catch (Exception e) { Debug.LogWarning("[Display] hold frame: " + e.Message); }
+        }
+
+        public static void ReleaseFrame()
+        {
+            if (held == null) return;
+            held.Release();
+            Destroy(held);
+            held = null;
+        }
+
+        // the backdrop camera: after clearing, the held picture, fitted inside the screen like the film was
+        void OnPostRender()
+        {
+            if (held == null || heldMat == null) return;
+            float sa = Screen.height > 0 ? (float)Screen.width / Screen.height : heldAspect;
+            float w = 1f, h = 1f;
+            if (sa > heldAspect) w = heldAspect / sa; else h = sa / heldAspect;
+            float x0 = (1f - w) * 0.5f, y0 = (1f - h) * 0.5f;
+            heldMat.mainTexture = held;
+            heldMat.SetPass(0);
+            GL.PushMatrix();
+            GL.LoadOrtho();
+            GL.Begin(GL.QUADS);
+            GL.Color(Color.white);
+            GL.TexCoord2(0f, 0f); GL.Vertex3(x0, y0, 0f);
+            GL.TexCoord2(0f, 1f); GL.Vertex3(x0, y0 + h, 0f);
+            GL.TexCoord2(1f, 1f); GL.Vertex3(x0 + w, y0 + h, 0f);
+            GL.TexCoord2(1f, 0f); GL.Vertex3(x0 + w, y0, 0f);
+            GL.End();
+            GL.PopMatrix();
         }
 
         /// <summary>Asks for the display mode whose refresh rate fits the FPS limit (applied a moment later, after

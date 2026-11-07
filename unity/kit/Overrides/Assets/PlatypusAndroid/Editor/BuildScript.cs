@@ -189,8 +189,9 @@ namespace PlatypusAndroid.EditorTools
                 if (Directory.Exists(bundleRoot)) Directory.Delete(bundleRoot, true);             // the Windows bundles
                 if (File.Exists(bundleRoot + ".meta")) File.Delete(bundleRoot + ".meta");
                 Directory.CreateDirectory(dest);
-                File.Copy(Path.Combine(temp, bundleName), Path.Combine(dest, bundleName), true);
-                File.Copy(Path.Combine(temp, "HighEnd"), Path.Combine(dest, "HighEnd"), true);
+                // ".unity3d" in the APK: Android's packer stores such files uncompressed, so they load in place
+                File.Copy(Path.Combine(temp, bundleName), Path.Combine(dest, bundleName + ModFiles.ApkBundleSuffix), true);
+                File.Copy(Path.Combine(temp, "HighEnd"), Path.Combine(dest, "HighEnd" + ModFiles.ApkBundleSuffix), true);
             }
             AssetDatabase.Refresh();
         }
@@ -229,7 +230,23 @@ namespace PlatypusAndroid.EditorTools
             });
             if (report.summary.result != BuildResult.Succeeded)
                 throw new Exception($"player build {report.summary.result}, {report.summary.totalErrors} errors (see the log)");
-            Debug.Log($"[PlatypusAndroid] APK {report.summary.totalSize / (1024 * 1024)} MB");
+            Debug.Log($"[PlatypusAndroid] APK {new FileInfo(output).Length / (1024 * 1024)} MB");
+            CheckApk(output);
+        }
+
+        /// <summary>Logs how the big files ended up in the APK: the bundles must be stored, not compressed.</summary>
+        static void CheckApk(string apk)
+        {
+            var toc = ApkZip.Read(apk);
+            if (toc.Count == 0) { Debug.LogWarning("[PlatypusAndroid] could not read the APK's table of contents"); return; }
+            int bad = 0;
+            foreach (var e in toc.Values.OrderByDescending(x => x.size).Take(12))
+            {
+                Debug.Log($"[PlatypusAndroid] APK  {(e.Stored ? "stored    " : "compressed")}  {e.size / 1048576,5} MB  {e.name}");
+            }
+            foreach (var e in toc.Values) if (e.name.Contains("/Bundle/") && !e.Stored && e.size > (1 << 20)) bad++;
+            if (bad > 0) Debug.LogWarning("[PlatypusAndroid] some asset bundles are COMPRESSED in the APK: the game copies them out on its first start (slower start, more storage)");
+            else Debug.Log("[PlatypusAndroid] APK check: asset bundles stored uncompressed");
         }
     }
 }

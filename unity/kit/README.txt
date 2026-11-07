@@ -83,6 +83,11 @@ What the port changes
   - Smooth frames: no HDR buffers, incremental garbage collection, Android Frame Pacing, direct-to-screen drawing
     where the phone allows it, buffered logging. The game already blends its 60-per-second logic between frames,
     so 90 / 120 FPS is real motion. The log gets a [Perf] line every 15 s (frame rate, slowest frame).
-  - A black backdrop is drawn first every frame (no leftover garbage / TV static around the intro films).
+  - A black backdrop is drawn first every frame (no leftover garbage / TV static around the intro films); the last
+    picture of the Claymatic film stays behind the first loading bar, as on PC.
+  - Asset bundles go into the APK as "<name>.unity3d", which Android stores uncompressed, so they load in place
+    (Unity 6 compressed the bare names and loading the main menu took minutes). The build log lists how the biggest
+    APK files are stored; a bundle that is still compressed is copied out on the first start instead.
+  - While a loading screen is up Unity gets more time per frame for loading (shorter loads).
   - Everything unlocked; Steam, achievements service and Workshop client removed (Workshop items are bundled).
   - The game's six custom shaders rebuilt from its compiled shaders; real TextMeshPro shaders.
