@@ -95,12 +95,25 @@ namespace PlatypusAndroid
             if (Time.unscaledTime < perfNext || perfTime <= 0f) return;
             perfNext = Time.unscaledTime + 15f;
             Debug.Log($"[Perf] {perfFrames / perfTime:0.0} FPS (target {target}), slowest frame {perfWorst * 1000f:0} ms, " +
-                      $"{perfHitches} long frames, display {DisplayRunner.CurrentHz:0} Hz, drawing {Screen.width}x{Screen.height}; loading {LoadingScreen.IsLoading}; {LoadWatch.Scenes()}");
+                      $"{perfHitches} long frames, display {DisplayRunner.CurrentHz:0} Hz, drawing {Screen.width}x{Screen.height}; memory {Rss()} MB; loading {LoadingScreen.IsLoading}; {LoadWatch.Scenes()}");
             perfFrames = perfHitches = 0; perfTime = perfWorst = 0f;
             if (!stateDumped && Time.unscaledTime > 40f) { stateDumped = true; State(); }
         }
 
         bool stateDumped;
+
+        /// <summary>The game's memory in RAM (Linux VmRSS), "?" when unknown.</summary>
+        static string Rss()
+        {
+            try
+            {
+                foreach (string line in File.ReadLines("/proc/self/status"))
+                    if (line.StartsWith("VmRSS:"))
+                        return (long.Parse(line.Substring(6).Trim().Split(' ')[0]) / 1024).ToString();
+            }
+            catch (Exception) { }
+            return "?";
+        }
 
         /// <summary>What is on screen: every camera and every root canvas (for black / missing pictures).</summary>
         static void State()

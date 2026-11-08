@@ -6,7 +6,8 @@
 //    Fullscreen = the same 16:9 picture stretched over the whole screen (as a PC emulator does): the game is
 //    drawn at a 16:9 size and Android scales that surface to the screen, so everything stretches together
 //    (films, menus, play field, score) and taps still land where they are drawn.
-//  - FPS 30 / 60 / 90 / 120; the display is asked for a matching refresh rate (DisplayRunner).
+//  - FPS 30 / 60 / 120; the display is asked for a matching refresh rate (DisplayRunner). No 90: Xiaomi's HyperOS gives
+//    apps 60 or 120 Hz only, so 90 ran at 60 (an old 90 setting becomes 120).
 using System;
 using Blackdrop.Platforms;
 using UnityEngine;
@@ -15,7 +16,7 @@ namespace PlatypusAndroid
 {
     public static class Quality
     {
-        public static readonly string[] FpsOptions = { "30", "60", "90", "120" };
+        public static readonly string[] FpsOptions = { "30", "60", "120" };
         static readonly string[] Ids = { "Options.QualityLow", "Options.QualityMedium", "Options.QualityHigh" };
         static readonly float[] Scale = { 0.7f, 0.85f, 1f };
         static readonly int[] MaxLines = { 720, 1080, 100000 };
@@ -52,12 +53,12 @@ namespace PlatypusAndroid
             set { Store.SetInt(DisplayKey, value ? 1 : 0); Apply(); }
         }
 
-        /// <summary>FPS limit kept to the offered values (the PC default was 240; 144 becomes 120).</summary>
+        /// <summary>FPS limit kept to the offered values (the PC default was 240; 144 and 90 become 120).</summary>
         public static int NormalizeFps(int fps)
         {
             if (fps <= 0 || fps >= 200) return 60;
             int best = 60, d = int.MaxValue;
-            foreach (string s in FpsOptions) { int v = int.Parse(s); if (Math.Abs(v - fps) < d) { d = Math.Abs(v - fps); best = v; } }
+            foreach (string s in FpsOptions) { int v = int.Parse(s); if (Math.Abs(v - fps) <= d) { d = Math.Abs(v - fps); best = v; } }
             return best;
         }
 

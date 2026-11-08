@@ -9,7 +9,8 @@
 //  - The ship's stats sit at the far left.
 // The game's own preview image is hidden and used as the material template; the panel logic is the game's.
 // The row has its own canvas group that ignores the panel's fading groups (only the screen's own fade applies), and
-// the "not joined" / "locked in" veils stay behind it, so the chosen ship is drawn fully opaque in its real colours.
+// the "not joined" veil stays behind it, so the chosen ship is drawn fully opaque in its real colours. The "locked in"
+// overlay (READY over a light veil once START is pressed) is drawn over the ships, as in the game.
 // A [Ships] log line tells what the row is drawn with (alphas, canvases, shader) in case it still looks wrong.
 using System;
 using System.Collections.Generic;
@@ -86,6 +87,7 @@ namespace PlatypusAndroid
             int order = root != null ? root.sortingOrder : 0, layer = root != null ? root.sortingLayerID : 0;
             Layer(holder.gameObject, order + 1, layer);
             if (panel.joinedOverlay != null) Layer(panel.joinedOverlay.gameObject, order + 2, layer);   // stats, arrows, buttons
+            if (panel.lockedInOverlay != null) Layer(panel.lockedInOverlay.gameObject, order + 3, layer, taps: false);   // READY
             rowGroup = hgo.AddComponent<CanvasGroup>();
             rowGroup.ignoreParentGroups = true;
             screenGroup = root != null ? root.rootCanvas.GetComponent<CanvasGroup>() : null;
@@ -107,14 +109,14 @@ namespace PlatypusAndroid
         float nextLog;
         int logs;
 
-        static void Layer(GameObject go, int order, int sortingLayer)
+        static void Layer(GameObject go, int order, int sortingLayer, bool taps = true)
         {
             Canvas c = go.GetComponent<Canvas>();
             if (c == null) c = go.AddComponent<Canvas>();
             c.overrideSorting = true;
             c.sortingLayerID = sortingLayer;
             c.sortingOrder = order;
-            if (go.GetComponent<GraphicRaycaster>() == null) go.AddComponent<GraphicRaycaster>();
+            if (taps && go.GetComponent<GraphicRaycaster>() == null) go.AddComponent<GraphicRaycaster>();
         }
 
         Slot MakeSlot(int i)
