@@ -10,8 +10,9 @@
 //    below it (another app, the system or a game booster may change it). [Perf] lines show the display's rate.
 //  - While a loading screen is up, Unity may spend more of each frame finishing loaded objects and uploading
 //    textures (the loading screen is still, so nothing visible suffers), which shortens loading.
-//  - Keeps the last picture of the Claymatic film on screen behind the loading bar, as the PC game does (there the
+//  - Keeps a film picture (the intro's first) on screen behind the loading bar, as the PC game does (there the
 //    camera simply never clears, which on a phone shows garbage instead).
+//  - The loading screen camera draws without HDR / MSAA, straight onto the screen (see LateUpdate).
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -40,6 +41,8 @@ namespace PlatypusAndroid
             go.hideFlags = HideFlags.HideInHierarchy;
             instance = go.AddComponent<DisplayRunner>();
         }
+
+        const int LoadingSceneIndex = 7;                   // LoadModScreen, loaded on top of the others by LoadingScreen
 
         static RenderTexture held;
         static Material heldMat;
@@ -81,6 +84,17 @@ namespace PlatypusAndroid
                     Camera c = cameras[i];
                     cameras[i] = null;
                     if (c == null || c == backdrop) continue;
+                    if (c.gameObject.scene.buildIndex == LoadingSceneIndex)
+                    {
+                        // the loading screen camera draws over the screen without clearing it; with HDR / MSAA it
+                        // drew into a buffer of its own that nothing cleared, whose leftovers cut the loading bar
+                        // (split in two, bits missing) and let old pictures through. Drawn straight to the screen,
+                        // with depth and stencil cleared, it is the same picture as on PC.
+                        c.allowHDR = false;
+                        c.allowMSAA = false;
+                        if (c.clearFlags == CameraClearFlags.Nothing) c.clearFlags = CameraClearFlags.Depth;
+                        continue;
+                    }
                     if (!sceneHdr.ContainsKey(c)) sceneHdr[c] = c.allowHDR;
                     c.allowHDR = level > 0 && sceneHdr[c];
                 }
@@ -103,6 +117,11 @@ namespace PlatypusAndroid
                 nextCheck = Time.unscaledTime + 5f;
                 CheckRefreshRate();
             }
+        }
+
+        void OnApplicationPause(bool paused)
+        {
+            if (paused) SaveGuard.Flush("the game went to the background");
         }
 
         void OnApplicationFocus(bool focus)

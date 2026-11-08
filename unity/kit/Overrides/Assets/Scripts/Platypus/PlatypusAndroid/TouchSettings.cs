@@ -2,7 +2,7 @@
 // PC mouse options were. "Mouse Sensitivity" becomes "Touch Controls Size", and two copies of that row are made for
 // "Touch Controls Opacity" and "Pause Button Opacity". "Allow P2 To Use Mouse" and "Show Mouse Hint" are hidden
 // (one player, no mouse on a phone). The pause menu's "Mouse Sensitivity" row gets the same three rows. The values
-// are read by TouchControls every frame.
+// are read by TouchControls every frame. The mouse picture beside these rows becomes a clay tablet with a finger.
 using System;
 using Blackdrop.Platforms;
 using UnityEngine;
@@ -57,6 +57,29 @@ namespace PlatypusAndroid
             if (label.text != null) { label.text.useLocalizedText = true; label.text.localizedTextID = id; label.text.UpdateText(); }
         }
 
+        static Sprite touchIcon;
+
+        /// <summary>The picture beside these rows: a clay tablet with a finger (Resources/touch_icon.png) in place of
+        /// the PC's mouse.</summary>
+        static void ShowTouchIcon(Transform parent)
+        {
+            foreach (Transform t in parent)
+            {
+                if (t.name.IndexOf("Icon", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                Image img = t.GetComponent<Image>();
+                if (img == null) continue;
+                if (touchIcon == null)
+                {
+                    Texture2D tex = Resources.Load<Texture2D>("touch_icon");
+                    if (tex == null) { Debug.LogWarning("[Touch] Resources/touch_icon.png is missing"); return; }
+                    touchIcon = Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+                    touchIcon.name = "touch_icon";
+                }
+                img.sprite = touchIcon;
+                img.preserveAspect = true;
+            }
+        }
+
         /// <summary>Called by the options menu in place of the mouse sensitivity row's setup.</summary>
         public static void Setup(OptionSelectorString sizeRow, Component allowP2ToUseMouse, Component showMouseHint, Action changed)
         {
@@ -81,6 +104,7 @@ namespace PlatypusAndroid
             Relabel(sizeRow, "Options.TouchSize");
             Relabel(opacityRow, "Options.TouchOpacity");
             Relabel(pauseRow, "Options.PauseOpacity");
+            ShowTouchIcon(parent);
 
             sizeRow.SetOptions(Labels(SizeSteps), null, IndexOf(SizeSteps, Mathf.RoundToInt(Size * 100f)));
             sizeRow.OnOptionChanged += (string o, int i) => { Write(ref size, SizeKey, SizeSteps[i]); changed?.Invoke(); };

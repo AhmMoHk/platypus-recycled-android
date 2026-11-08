@@ -1,7 +1,7 @@
 // Platypus Reclayed Android port: the game's log on the phone, for finding problems without a PC.
 //  - written to Android/data/<package>/files/platypus_log.txt (the run before: platypus_log_prev.txt);
 //    reachable from Windows over USB (phone storage > Android > data > <package> > files)
-//  - hold four fingers on the screen for two seconds to share it (Telegram, mail, ...)
+//  - no gesture shares it any more (the four-finger hold stalled the game); copy it over USB or with adb
 //  - lines are buffered and written once a second (at once for errors), so logging never stalls a frame
 using System;
 using System.IO;
@@ -16,7 +16,7 @@ namespace PlatypusAndroid
         static readonly object gate = new object();
         static string path;
         static readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();   // usable from any thread
-        float holdStart = -1f, nextFlush;
+        float nextFlush;
         int perfFrames, perfHitches; float perfTime, perfWorst, perfNext = 15f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -77,12 +77,6 @@ namespace PlatypusAndroid
         {
             if (Time.unscaledTime >= nextFlush) { nextFlush = Time.unscaledTime + 1f; Flush(); }
             Perf();
-            if (Input.touchCount >= 4)
-            {
-                if (holdStart < 0f) holdStart = Time.unscaledTime;
-                else if (Time.unscaledTime - holdStart > 2f) { holdStart = float.MaxValue; Share(); }
-            }
-            else holdStart = -1f;
         }
 
         /// <summary>Every 15 s: average frame rate, the slowest frame and how many frames took over twice the target.</summary>
@@ -131,32 +125,6 @@ namespace PlatypusAndroid
                 Debug.Log(sb.ToString());
             }
             catch (Exception e) { Debug.LogWarning("[State] " + e.Message); }
-        }
-
-        static void Share()
-        {
-            if (Application.platform != RuntimePlatform.Android || path == null) return;
-            State();
-            Flush();
-            try
-            {
-                string text;
-                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                using (var r = new StreamReader(fs)) text = r.ReadToEnd();
-                if (text.Length > 200000) text = text.Substring(0, 30000) + "\n...\n" + text.Substring(text.Length - 160000);   // an Intent carries < 1 MB
-                using (var intentClass = new AndroidJavaClass("android.content.Intent"))
-                using (var intent = new AndroidJavaObject("android.content.Intent", intentClass.GetStatic<string>("ACTION_SEND")))
-                using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
-                using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
-                {
-                    intent.Call<AndroidJavaObject>("setType", "text/plain");
-                    intent.Call<AndroidJavaObject>("putExtra", intentClass.GetStatic<string>("EXTRA_SUBJECT"), "Platypus Reclayed log");
-                    intent.Call<AndroidJavaObject>("putExtra", intentClass.GetStatic<string>("EXTRA_TEXT"), text);
-                    using (var chooser = intentClass.CallStatic<AndroidJavaObject>("createChooser", intent, "Share the game log"))
-                        activity.Call("startActivity", chooser);
-                }
-            }
-            catch (Exception e) { Debug.LogWarning("[LogFile] share failed: " + e.Message); }
         }
     }
 }
