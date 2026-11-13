@@ -1,12 +1,16 @@
 // Platypus Reclayed Android port: clay on-screen controls (only during active gameplay).
-//  - joystick base  Resources/1000045163.png  (hollow red clay ring, fixed bottom-left)
+//  - joystick base  Resources/1000045163.png  (hollow red clay ring, bottom-left, right above the lives display)
 //  - joystick knob  Resources/1000045164.png  (blue clay disc, 47.5% of the ring, follows the thumb 360°, snaps back)
-//  - fire button    Resources/1000045153.png  (red ring + yellow crosshair + blue dot, bottom-right, tap / hold)
+//  - fire button    Resources/1000045153.png  (red ring + yellow crosshair + blue dot, bottom-right on the same
+//                   line as the joystick, tap / hold)
 //  - pause button   Resources/pause_button.png (red clay ring + two yellow bars), top-right corner
 // Size and opacity come from Options > Gameplay > Controls (TouchSettings). A held control turns darker and
 // shrinks a little. Multi-touch with independent finger ids; input goes to the Rewired stand-in through
 // PlatypusAndroid.TouchInput. Positions are worked out in screen-glass pixels and converted to drawn pixels, so the
-// controls stay round when the Fullscreen screen option stretches the picture sideways.
+// controls stay round when the Fullscreen screen option stretches the picture sideways. The joystick and the fire
+// button stand on a line just above player 1's lives display (ship icon, number of lives, shields), whatever their
+// size, so they never cover it; the joystick is centred over it as far as the screen edge allows.
+using System.Collections.Generic;
 using Platypus.Core;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -108,10 +112,72 @@ namespace PlatypusAndroid
             fireR = unit * FireSize * size * 0.5f;
             pauseR = unit * PauseSize * size * 0.5f;
             float m = unit * 0.05f;
-            baseCenter = new Vector2(left + m + baseR, bottom + m + baseR);
-            fireCenter = new Vector2(right - m - fireR, bottom + m + fireR);
+            float line = bottom + m;                                     // the controls' bottom edge
+            TrackLives();
+            float hud = Mathf.Max(livesKnown ? livesTop : 0f, livesArea);   // the lives strip, or what is drawn above it
+            if (hud > 0f) line = Mathf.Max(line, hud + unit * 0.025f);
+            baseCenter = new Vector2(left + m + baseR, line + baseR);
+            if (livesKnown || livesArea > 0f) baseCenter.x = Mathf.Max(livesKnown ? livesX : 0f, left + m * 0.4f + baseR);
+            fireCenter = new Vector2(right - m - fireR, line + fireR);
 
             pauseCenter = new Vector2(right - m * 0.6f - pauseR, top - m * 0.6f - pauseR);   // top-right corner
+        }
+
+        // ---- player 1's lives display --------------------------------------------------------------------------------
+
+        DisplayPlayerLives lives;
+        int livesScene = int.MinValue;
+        readonly List<RectTransform> livesParts = new List<RectTransform>();
+        Camera livesCam;
+        bool livesKnown;
+        float livesTop, livesX;                                          // drawn-pixel top, glass-pixel centre
+        float livesArea;                                                 // top of the whole lives strip (drawn pixels)
+        static readonly Vector3[] corners = new Vector3[4];
+
+        /// <summary>Where player 1's ship icon, lives and shields are drawn; the last place seen stays known while
+        /// they are hidden (between lives), so the controls do not jump.</summary>
+        void TrackLives()
+        {
+            Scene g = SceneManager.GetSceneByBuildIndex((int)BuildScenes.Gameplay);
+            if (g.handle != livesScene || lives == null)
+            {
+                livesScene = g.handle;
+                lives = null;
+                livesKnown = false;
+                livesArea = 0f;
+                livesParts.Clear();
+                foreach (DisplayPlayerLives d in FindObjectsByType<DisplayPlayerLives>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                    if (d.gameObject.scene == g && d.AndroidPlayerIndex == 0) { lives = d; break; }
+                if (lives == null) return;
+                Component[] parts = { lives.AndroidIcon, lives.AndroidPracticeIcon, lives.AndroidLivesText,
+                                      lives.GetComponentInChildren<DisplayPlayerShieldCount>(true) };
+                foreach (Component c in parts) if (c != null && c.transform is RectTransform rt) livesParts.Add(rt);
+                Canvas cv = lives.GetComponentInParent<Canvas>(true);
+                livesCam = cv != null && cv.rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay ? cv.rootCanvas.worldCamera : null;
+            }
+            if (lives.transform is RectTransform strip && strip.gameObject.activeInHierarchy)
+            {
+                strip.GetWorldCorners(corners);
+                float t = RectTransformUtility.WorldToScreenPoint(livesCam, corners[1]).y;   // top-left corner
+                if (t > 0f && t < Screen.height * 0.5f) livesArea = t;
+            }
+            float top = float.MinValue, minX = float.MaxValue, maxX = float.MinValue;
+            foreach (RectTransform rt in livesParts)
+            {
+                if (rt == null || !rt.gameObject.activeInHierarchy) continue;
+                rt.GetWorldCorners(corners);
+                for (int i = 0; i < 4; i++)
+                {
+                    Vector2 sp = RectTransformUtility.WorldToScreenPoint(livesCam, corners[i]);
+                    top = Mathf.Max(top, sp.y);
+                    minX = Mathf.Min(minX, sp.x);
+                    maxX = Mathf.Max(maxX, sp.x);
+                }
+            }
+            if (top == float.MinValue || top > Screen.height * 0.5f) return;   // nothing shown (or not laid out yet)
+            livesKnown = true;
+            livesTop = top;
+            livesX = (minX + maxX) * 0.5f * sx;
         }
 
         void Place(RectTransform rt, Vector2 center, float diameter)

@@ -67,7 +67,9 @@ What the port changes
     The Reclayed music selector stays open with add-ons on. Hall of Fame: a tap anywhere but the page arrows goes
     back at once.
   - Clay touch controls, only while playing (hidden in menus, options, pause, level select), see-through:
-      Overrides\Assets\PlatypusAndroid\Resources\1000045163.png  joystick ring, fixed, bottom-left
+      Overrides\Assets\PlatypusAndroid\Resources\1000045163.png  joystick ring, bottom-left, right above player 1's lives
+                                                                 (the fire button stands on the same line; neither
+                                                                 covers the lives, whatever the size)
       Overrides\Assets\PlatypusAndroid\Resources\1000045164.png  joystick knob, 47.5% of the ring, 360 deg, springs back
       Overrides\Assets\PlatypusAndroid\Resources\1000045153.png  fire, bottom-right, tap or hold
       Overrides\Assets\PlatypusAndroid\Resources\pause_button.png pause, top-right corner (tap)
@@ -83,8 +85,10 @@ What the port changes
     whatever the ship's colour (Resources/HatMasks marks them in each preview); the stats sit at the far left; Back
     returns to level select.
   - A ship without a power-up time cap (0, the Purist of Casinopolis Ships) gets the usual cap instead of losing
-    each power-up the moment it is picked up; a ship asking for more than 4 s of safety after taking or losing a
-    power-up (the Purist: 8 s) gets the game's usual time (2 s, none on Expert / Nasty after taking one).
+    each power-up the moment it is picked up.
+  - Every ship starts (and continues) with 4 lives; ships differ in shields and in their safe time after taking or
+    losing a power-up, as the game's and add-ons' files set them.
+  - After the last life, Fire takes a credit at once (the PC game ignored it for the first 90 ticks of the count).
   - No controller glyphs in texts ("Change color O" -> "Change color").
   - Video options:
       Quality  Low / Medium / High - the size the game is drawn at (Low 70% and at most 720 lines, Medium 85% and at

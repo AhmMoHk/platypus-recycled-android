@@ -85,8 +85,8 @@ namespace PlatypusAndroid.EditorTools
             PlayerSettings.productName = "Platypus Reclayed";
             if (string.IsNullOrEmpty(PlayerSettings.companyName) || PlayerSettings.companyName == "DefaultCompany") PlayerSettings.companyName = "Platypus Port";
             PlayerSettings.SetApplicationIdentifier(android, "com.platypusport.reclayed");
-            PlayerSettings.bundleVersion = "1.10";
-            PlayerSettings.Android.bundleVersionCode = 10;
+            PlayerSettings.bundleVersion = "2.0";
+            PlayerSettings.Android.bundleVersionCode = 20;
 
             PlayerSettings.SetScriptingBackend(android, ScriptingImplementation.IL2CPP);
             PlayerSettings.SetIl2CppCompilerConfiguration(android, Il2CppCompilerConfiguration.Release);
