@@ -6,7 +6,8 @@
 //    along with the chosen ship growing into the middle; ship packs with more ships (9 and so on) scroll the same way.
 //  - All ships share one colour except the Perry the Platypus pack, which keeps its own (ShipColours): "Change Color"
 //    recolours the chosen ship's group only, and each ship in the row is shown in its group's colour, with the skin
-//    definition the game flies with.
+//    definition the game flies with. The hats of the hats add-on keep their own colours (the add-on paints them into
+//    the colour masks of its previews, so the ship's colour recoloured them; a mask per preview marks the hat).
 //  - The ship's stats sit at the far left.
 // The game's own preview image is hidden and used as the material template; the panel logic is the game's.
 // The row has its own canvas group that ignores the panel's fading groups (only the screen's own fade applies), and
@@ -173,6 +174,31 @@ namespace PlatypusAndroid
             m.SetFloat("_RedSmoothness", skin.uiPrimaryColorSmoothness);
             m.SetFloat("_GreenSmoothness", skin.uiSecondaryColorSmoothness);
             m.SetFloat("_BlueSmoothness", skin.uiTertiaryColorSmoothness);
+            // the hats of the hats add-on keep their own colours (Resources/HatMasks, one mask per preview)
+            Texture2D hat = HatMask(skin.previewSprite);
+            m.SetTexture("_HatMask", hat != null ? hat : Texture2D.blackTexture);
+            Sprite shown = s.img.sprite;
+            if (hat != null && shown != null && shown.texture != null)
+            {
+                Rect tr = shown.textureRect;
+                float w = shown.texture.width, h = shown.texture.height;
+                m.SetVector("_HatRect", new Vector4(tr.x / w, tr.y / h, tr.width / w, tr.height / h));
+            }
+            else m.SetVector("_HatRect", new Vector4(0f, 0f, 1f, 1f));
+        }
+
+        static readonly Dictionary<string, Texture2D> hatMasks = new Dictionary<string, Texture2D>();
+
+        static Texture2D HatMask(string preview)
+        {
+            if (string.IsNullOrEmpty(preview)) return null;
+            string name = preview.Substring(preview.LastIndexOfAny(new[] { '/', '\\' }) + 1);
+            if (!hatMasks.TryGetValue(name, out Texture2D t))
+            {
+                t = Resources.Load<Texture2D>("HatMasks/" + name);
+                hatMasks[name] = t;
+            }
+            return t;
         }
 
         static int Wrap(int i, int n) => ((i % n) + n) % n;

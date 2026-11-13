@@ -79,7 +79,8 @@ What the port changes
     side; all three of the game's ships at once), the arrows / a tap on a neighbour / a gamepad slide the row (ship packs with more ships too);
     all ships share one colour except the Perry the Platypus pack, which keeps its own: "Change Color" recolours the
     chosen ship's group only and moving along the row changes no colours; where two add-ons define the same skin (hats and
-    Casinopolis), the screen shows the one the game flies with (hats included); the stats sit at the far left; Back
+    Casinopolis), the screen shows the one the game flies with (hats included); the hats keep their own colours
+    whatever the ship's colour (Resources/HatMasks marks them in each preview); the stats sit at the far left; Back
     returns to level select.
   - A ship without a power-up time cap (0, the Purist of Casinopolis Ships) gets the usual cap instead of losing
     each power-up the moment it is picked up; a ship asking for more than 4 s of safety after taking or losing a
