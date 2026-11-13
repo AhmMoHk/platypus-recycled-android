@@ -1,8 +1,10 @@
-// Platypus Reclayed Android port: ship colours per ship pack. Each pack (the base game or a Workshop add-on: the
-// hats, Perry the Platypus, Casinopolis Ships...) keeps a colour of its own. "Change Color" on a ship changes the
-// colour of every ship of that pack, and of no other; moving to another ship shows it in its own pack's colour and
-// changes nothing else. The PC game instead carried the colour over by skin name, which only works for packs named
-// like the base game: ships of other packs fell back to their first colour (yellow), and the row showed a mix.
+// Platypus Reclayed Android port: ship colours. All ships share one colour (the base game, the hats, Casinopolis
+// Ships...), except the Perry the Platypus pack, whose ships have colours of their own (teal, purple, brown...) and
+// keep a colour of their own. "Change Color" changes the colour of every ship of its group, and of no other; moving
+// to another ship shows it in its group's colour and changes nothing. The colour is matched by the colour word of the
+// skin's name ("beginnerYellow2" of ship "beginner2" is yellow). The PC game carried the colour over by a name rule
+// that only works for skins named like the base game's: other ships fell back to their first colour (yellow), and the
+// row showed a mix.
 // Where two add-ons define a skin of the same name (the hats and Casinopolis both redefine the base game's skins),
 // the definition the game flies with is used everywhere, so the ship screen shows the hats the ship really wears.
 // The colours are remembered between sessions.
@@ -16,8 +18,9 @@ namespace PlatypusAndroid
 {
     public static class ShipColours
     {
-        const string PrefsKey = "PlatypusAndroid.PackColours";
-        static Dictionary<string, string> colours;                     // pack -> colour word ("yellow", "teal" ...)
+        const string PrefsKey = "PlatypusAndroid.ShipColours";
+        const string Shared = "shared", Perry = "perry";
+        static Dictionary<string, string> colours;                     // group -> colour word ("yellow", "teal" ...)
         static ModInstance builtFor;
         static readonly Dictionary<string, List<SkinData>> skinsOf = new Dictionary<string, List<SkinData>>();
         static readonly Dictionary<string, string> packOf = new Dictionary<string, string>();
@@ -39,18 +42,21 @@ namespace PlatypusAndroid
             }
         }
 
-        /// <summary>The pack a ship comes from: the add-on (or base mod) whose definition of it the game uses.</summary>
+        /// <summary>The colour group of a ship: "perry" for the ships of the Perry the Platypus pack, "shared" for
+        /// all others. The pack is the add-on (or base mod) whose definition of the ship the game uses.</summary>
         static string Pack(string ship)
         {
-            if (string.IsNullOrEmpty(ship)) return "";
+            if (string.IsNullOrEmpty(ship)) return Shared;
             if (packOf.TryGetValue(ship, out string p)) return p;
-            p = "";
+            string key = "";
             ModInstance root = ModManager.modRoot;
             if (root != null)
             {
-                foreach (ModInstance a in root.addons) if (Defines(a, ship)) { p = Key(a); break; }
-                if (p == "") for (ModInstance m = root; m != null; m = m.baseMod) if (Defines(m, ship)) { p = Key(m); break; }
+                foreach (ModInstance a in root.addons) if (Defines(a, ship)) { key = Key(a); break; }
+                if (key == "") for (ModInstance m = root; m != null; m = m.baseMod) if (Defines(m, ship)) { key = Key(m); break; }
             }
+            p = key.ToLowerInvariant().Contains("perry") || key.Contains("3720350725") ||
+                ship.StartsWith("perry", System.StringComparison.OrdinalIgnoreCase) ? Perry : Shared;
             packOf[ship] = p;
             return p;
         }
@@ -58,7 +64,8 @@ namespace PlatypusAndroid
         static bool Defines(ModInstance m, string ship) => m != null && m.data != null && m.data.TryGetShipData(out ShipData _, ship);
 
         static string Key(ModInstance m) =>
-            m.meta == null ? "" : (m.meta.modName ?? "") + "|" + Path.GetFileName((m.meta.AssetRoot ?? "").TrimEnd('/', '\\'));
+            m.meta == null ? "" : (m.meta.modName ?? "") + "|" + (m.meta.displayName ?? "") + "|" +
+                                  Path.GetFileName((m.meta.AssetRoot ?? "").TrimEnd('/', '\\'));
 
         /// <summary>The colour part of a skin's name: "beginnerYellow2" of ship "beginner2" is "yellow",
         /// "perryBeginnerTeal" of "perryBeginner" is "teal".</summary>
@@ -84,7 +91,7 @@ namespace PlatypusAndroid
         }
 
         /// <summary>In place of the game's RefitSkin (start of the ship screen, another ship chosen): the ship's own
-        /// saved skin, else its pack's colour, else its first colour. False when the ship has no skins (the game decides).</summary>
+        /// saved skin, else its group's colour, else its first colour. False when the ship has no skins (the game decides).</summary>
         public static bool Refit(int player)
         {
             Build();
@@ -100,7 +107,7 @@ namespace PlatypusAndroid
             return true;
         }
 
-        /// <summary>After "Change Color": the chosen colour becomes the colour of the ship's pack.</summary>
+        /// <summary>After "Change Color": the chosen colour becomes the colour of the ship's group.</summary>
         public static void Chosen(int player)
         {
             Build();
@@ -111,7 +118,7 @@ namespace PlatypusAndroid
         }
 
         /// <summary>The skin a ship is shown in on the ship screen: the chosen ship its chosen skin, the others their
-        /// pack's colour.</summary>
+        /// group's colour.</summary>
         public static SkinData SkinFor(string ship)
         {
             Build();

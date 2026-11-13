@@ -77,12 +77,13 @@ What the port changes
   - One player: player 2's HUD ("Press Fire To Join") and ship panel are gone. Ship screen: player 1 is in at once;
     the ships stand in a row (chosen one big, fully opaque, in the middle; neighbours smaller and see-through either
     side; all three of the game's ships at once), the arrows / a tap on a neighbour / a gamepad slide the row (ship packs with more ships too);
-    each ship pack (the game, each Workshop add-on) keeps a colour of its own: "Change Color" recolours the chosen
-    ship's pack only and moving along the row changes no colours; where two add-ons define the same skin (hats and
+    all ships share one colour except the Perry the Platypus pack, which keeps its own: "Change Color" recolours the
+    chosen ship's group only and moving along the row changes no colours; where two add-ons define the same skin (hats and
     Casinopolis), the screen shows the one the game flies with (hats included); the stats sit at the far left; Back
     returns to level select.
   - A ship without a power-up time cap (0, the Purist of Casinopolis Ships) gets the usual cap instead of losing
-    each power-up the moment it is picked up.
+    each power-up the moment it is picked up; a ship asking for more than 4 s of safety after taking or losing a
+    power-up (the Purist: 8 s) gets the game's usual time (2 s, none on Expert / Nasty after taking one).
   - No controller glyphs in texts ("Change color O" -> "Change color").
   - Video options:
       Quality  Low / Medium / High - the size the game is drawn at (Low 70% and at most 720 lines, Medium 85% and at

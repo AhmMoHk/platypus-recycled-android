@@ -4,8 +4,9 @@
 //  - The ships stand side by side: the chosen one big in the middle, its neighbours smaller and dimmer either side
 //    (all three at once with the game's three ships). The arrows, a gamepad, or a tap on a neighbour slide the row
 //    along with the chosen ship growing into the middle; ship packs with more ships (9 and so on) scroll the same way.
-//  - Every ship pack keeps its own colour (ShipColours): "Change Color" recolours the ships of the chosen ship's pack
-//    only, and each ship in the row is shown in its own pack's colour, with the skin definition the game flies with.
+//  - All ships share one colour except the Perry the Platypus pack, which keeps its own (ShipColours): "Change Color"
+//    recolours the chosen ship's group only, and each ship in the row is shown in its group's colour, with the skin
+//    definition the game flies with.
 //  - The ship's stats sit at the far left.
 // The game's own preview image is hidden and used as the material template; the panel logic is the game's.
 // The row has its own canvas group that ignores the panel's fading groups (only the screen's own fade applies), and
