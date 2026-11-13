@@ -4,8 +4,8 @@
 //  - The ships stand side by side: the chosen one big in the middle, its neighbours smaller and dimmer either side
 //    (all three at once with the game's three ships). The arrows, a gamepad, or a tap on a neighbour slide the row
 //    along with the chosen ship growing into the middle; ship packs with more ships (9 and so on) scroll the same way.
-//  - Every ship in the row wears the colour chosen with "Change Color" (the same colour family the game itself keeps
-//    when you switch ships).
+//  - Every ship pack keeps its own colour (ShipColours): "Change Color" recolours the ships of the chosen ship's pack
+//    only, and each ship in the row is shown in its own pack's colour, with the skin definition the game flies with.
 //  - The ship's stats sit at the far left.
 // The game's own preview image is hidden and used as the material template; the panel logic is the game's.
 // The row has its own canvas group that ignores the panel's fading groups (only the screen's own fade applies), and
@@ -39,7 +39,6 @@ namespace PlatypusAndroid
         RectTransform area, holder;
         readonly Slot[] slots = new Slot[6];          // ships at base-2 .. base+3 around the animated position
         ShipData[] ships = new ShipData[0];
-        SkinData[] skins = new SkinData[0];
         float pos, target;                            // ship index, animated / wanted (not wrapped)
         string shownShip;
         bool ready;
@@ -70,7 +69,6 @@ namespace PlatypusAndroid
             }
 
             ships = ModManager.modRoot.GetAllShipData() ?? new ShipData[0];
-            skins = (ModManager.modRoot.GetAllSkinData() ?? Enumerable.Empty<SkinData>()).ToArray();
 
             // the game's preview becomes the frame of the row: full panel, picture hidden
             RectTransform srt = source.rectTransform;
@@ -146,30 +144,12 @@ namespace PlatypusAndroid
         }
 
         static string CurrentShip() => Globals.playerShips.TryGetValue(0, out string v) ? v : null;
-        static string CurrentSkin() => Globals.playerSkin.TryGetValue(0, out string v) ? v : null;
 
         int CurrentIndex()
         {
             string name = CurrentShip();
             for (int i = 0; i < ships.Length; i++) if (ships[i].name == name) return i;
             return -1;
-        }
-
-        /// <summary>The skin of <paramref name="ship"/> in the colour family of the chosen skin (the game's own
-        /// rule when you switch ships).</summary>
-        SkinData SkinFor(ShipData ship, string chosenShip, string chosenSkin)
-        {
-            SkinData first = null;
-            string want = (chosenSkin ?? "").ToLowerInvariant();
-            foreach (SkinData k in skins)
-            {
-                if (k == null || k.targetShip != ship.name) continue;
-                if (ship.name == chosenShip && k.name == chosenSkin) return k;
-                if (first == null) first = k;
-                if (ship.name != chosenShip && k.name.Length >= ship.name.Length &&
-                    want.Contains(k.name.Substring(ship.name.Length).ToLowerInvariant())) return k;
-            }
-            return first;
         }
 
         void Dress(Slot s, ShipData ship, SkinData skin)
@@ -225,7 +205,7 @@ namespace PlatypusAndroid
             float boxH = H * 0.56f, boxW = Mathf.Min(W * 0.4f, boxH * 2.4f);
             float spacing = W * 0.29f, y = H * 0.06f;
             int b = Mathf.FloorToInt(pos);
-            string chosenShip = ship, chosenSkin = CurrentSkin();
+            string chosenShip = ship;
             bool canTap = panel.PlayerConnected && !panel.IsLockedIn && !forced;
 
             int newOrder = 0;
@@ -245,7 +225,7 @@ namespace PlatypusAndroid
 
                 ShipData sd = forced ? FindShip(chosenShip) : ships[Wrap(b + k, count)];
                 if (sd == null) { s.rt.gameObject.SetActive(false); continue; }
-                Dress(s, sd, SkinFor(sd, chosenShip, chosenSkin));
+                Dress(s, sd, ShipColours.SkinFor(sd.name));
 
                 float scale = a <= 1f ? Mathf.Lerp(1f, Side, a) : Mathf.Lerp(Side, Side * 0.75f, a - 1f);
                 float x = a <= 1f ? o * spacing : Mathf.Sign(o) * (spacing + (a - 1f) * spacing * 0.55f);

@@ -1,35 +1,46 @@
-// Platypus Reclayed Android port: the red of the pressed BACK in the bar at the bottom (see BackBar).
+// Platypus Reclayed Android port: the red of the pressed BACK in the bar at the bottom (see BackBar). The text is red
+// exactly while a finger is on the button (a tap or a long press) and white again as soon as no finger is on it.
 using UnityEngine;
-using UnityEngine.EventSystems;
 
 namespace PlatypusAndroid
 {
     /// <summary>The red of a pressed bar button.</summary>
-    public class BackBarPress : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
+    public class BackBarPress : MonoBehaviour
     {
         PText text;
         Material normal;
-        bool held, red;
-        float until;
+        bool red;
+        Canvas canvas;
 
-        public void OnPointerDown(PointerEventData e) { held = true; Set(true); }
+        void Update() => Set(FingerOn());
 
-        public void OnPointerUp(PointerEventData e) { held = false; until = Time.unscaledTime + 0.15f; }
+        void OnDisable() { if (red) Set(false); }
 
-        public void Flash() { until = Time.unscaledTime + 0.3f; Set(true); }
-
-        void Update()
+        bool FingerOn()
         {
-            if (red && !held && Time.unscaledTime >= until) Set(false);
+            if (!(transform is RectTransform rt)) return false;
+            if (canvas == null) canvas = GetComponentInParent<Canvas>();
+            Camera cam = null;
+            if (canvas != null && canvas.rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay) cam = canvas.rootCanvas.worldCamera;
+            if (Input.touchCount > 0)
+            {
+                for (int i = 0; i < Input.touchCount; i++)
+                {
+                    Touch t = Input.GetTouch(i);
+                    if (t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled) continue;
+                    if (RectTransformUtility.RectangleContainsScreenPoint(rt, t.position, cam)) return true;
+                }
+                return false;
+            }
+            return Input.GetMouseButton(0) && RectTransformUtility.RectangleContainsScreenPoint(rt, Input.mousePosition, cam);
         }
-
-        void OnDisable() { held = false; if (red) Set(false); }
 
         void Set(bool on)
         {
+            if (on == red) return;
             if (text == null) text = GetComponentInChildren<PText>(true);
             if (text == null || GlobalAssets.Instance == null) return;
-            if (on && !red) normal = text.material;
+            if (on) normal = text.material;
             Material m = on ? GlobalAssets.Instance.letterMaterialRed : (normal != null ? normal : GlobalAssets.Instance.letterMaterialWhite);
             red = on;
             if (m == null || text.material == m) return;

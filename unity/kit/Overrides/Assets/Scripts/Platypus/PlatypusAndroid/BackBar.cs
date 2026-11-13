@@ -91,15 +91,13 @@ namespace PlatypusAndroid
             return has;
         }
 
-        /// <summary>Gives a bar button its press: red while held, a menu sound, then the screen's own Back (what the
+        /// <summary>Gives a bar button its press: red while a finger is on it, a menu sound, then the screen's own Back (what the
         /// Back key does there, e.g. the level select first closes an open level panel).</summary>
         public static void Dress(Button button)
         {
-            BackBarPress p = button.GetComponent<BackBarPress>();
-            if (p == null) p = button.gameObject.AddComponent<BackBarPress>();
+            if (button.GetComponent<BackBarPress>() == null) button.gameObject.AddComponent<BackBarPress>();
             button.onClick.AddListener(() =>
             {
-                p.Flash();
                 Audio.PlaySound("s_ui_submit");
                 MainMenuManager menu = button != null ? Info(button.gameObject.scene).menu : null;
                 if (menu != null) menu.NavigateBack();                     // the main menu's way back, without its own second sound

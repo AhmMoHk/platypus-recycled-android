@@ -26,7 +26,7 @@
 الإعدادات الجديدة:
   - Video:  Quality (Low / Medium / High)  |  Screen (Original = 16:9 والباقي أسود، Fullscreen = 16:9 ممطوطة على كل الشاشة)
             |  FPS (30 / 60 / 120)
-  - Gameplay > Controls (ونفسها بقائمة الإيقاف):  حجم أزرار اللمس، شفافيتها، شفافية زر الإيقاف.
+  - Gameplay > Controls (ونفسها بقائمة الإيقاف):  حجم أزرار اللمس، وشفافيتها (زر الإيقاف وياها).
   - إذا ضلت اللعبة على 60 فريم بموبايل شاومي: الإعدادات > الشاشة > معدل التحديث > مخصص 120Hz، وشيل اللعبة من
     Game Turbo إذا موجودة بيها.
 
@@ -62,7 +62,8 @@ What the port changes
     Android back gesture is Escape (back / pause). During play touches only drive the joystick, fire and pause.
   - The black bar at the bottom of the menus shows only BACK, once, in the middle (no Select / Start / Navigate),
     and only where the screen has no Back item of its own: not on "Press fire", not in the Hall of Fame, not in the
-    options screens (the Reclayed music selector keeps it). Pressed it turns red and makes the menu button sound.
+    options screens (the Reclayed music selector keeps it). It is red while a finger is on it and makes the menu
+    button sound.
     The Reclayed music selector stays open with add-ons on. Hall of Fame: a tap anywhere but the page arrows goes
     back at once.
   - Clay touch controls, only while playing (hidden in menus, options, pause, level select), see-through:
@@ -71,12 +72,17 @@ What the port changes
       Overrides\Assets\PlatypusAndroid\Resources\1000045153.png  fire, bottom-right, tap or hold
       Overrides\Assets\PlatypusAndroid\Resources\pause_button.png pause, top-right corner (tap)
     A held control turns darker and shrinks a little. Options > Gameplay > Controls (and the pause menu's options):
-    Touch Controls Size 50-150% (default 100%), Touch Controls Opacity 10-100% (60%), Pause Button Opacity (70%).
+    Touch Controls Size 50-150% (default 100%), Touch Controls Opacity 10-100% (60%, the pause button too).
     The mouse options (sensitivity, mouse hint, P2 mouse) are gone; a clay tablet replaces the mouse picture there.
   - One player: player 2's HUD ("Press Fire To Join") and ship panel are gone. Ship screen: player 1 is in at once;
     the ships stand in a row (chosen one big, fully opaque, in the middle; neighbours smaller and see-through either
     side; all three of the game's ships at once), the arrows / a tap on a neighbour / a gamepad slide the row (ship packs with more ships too);
-    "Change Color" colours every ship in the row; the stats sit at the far left; Back returns to level select.
+    each ship pack (the game, each Workshop add-on) keeps a colour of its own: "Change Color" recolours the chosen
+    ship's pack only and moving along the row changes no colours; where two add-ons define the same skin (hats and
+    Casinopolis), the screen shows the one the game flies with (hats included); the stats sit at the far left; Back
+    returns to level select.
+  - A ship without a power-up time cap (0, the Purist of Casinopolis Ships) gets the usual cap instead of losing
+    each power-up the moment it is picked up.
   - No controller glyphs in texts ("Change color O" -> "Change color").
   - Video options:
       Quality  Low / Medium / High - the size the game is drawn at (Low 70% and at most 720 lines, Medium 85% and at
@@ -101,7 +107,7 @@ What the port changes
     plays from it once the game has loaded, as on PC. The loading screen camera draws straight to the screen (no
     HDR / MSAA buffer of its own, whose leftovers split the loading bar and let old pictures through).
   - Morphing menu texts change at a steady 60 steps a second (the game's timer ran at about half speed at 60 FPS);
-    in the achievements a new text starts at once, and locked achievements show no picture.
+    in the achievements a new text starts at once.
   - Save files are also written when an area is completed and when the game goes to the background (Android may
     end it there without warning; progress since the last loading screen was lost).
   - Asset bundles go into the APK as "<name>.unity3d", which Android stores uncompressed, so they load in place
