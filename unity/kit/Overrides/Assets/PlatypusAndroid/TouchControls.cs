@@ -1,5 +1,5 @@
 // Platypus Reclayed Android port: clay on-screen controls (only during active gameplay).
-//  - joystick base  Resources/1000045163.png  (hollow red clay ring, bottom-left, right above the lives display)
+//  - joystick base  Resources/1000045163.png  (hollow red clay ring, against the left edge, above the lives display)
 //  - joystick knob  Resources/1000045164.png  (blue clay disc, 47.5% of the ring, follows the thumb 360°, snaps back)
 //  - fire button    Resources/1000045153.png  (red ring + yellow crosshair + blue dot, bottom-right on the same
 //                   line as the joystick, tap / hold)
@@ -9,7 +9,7 @@
 // PlatypusAndroid.TouchInput. Positions are worked out in screen-glass pixels and converted to drawn pixels, so the
 // controls stay round when the Fullscreen screen option stretches the picture sideways. The joystick and the fire
 // button stand on a line just above player 1's lives display (ship icon, number of lives, shields), whatever their
-// size, so they never cover it; the joystick is centred over it as far as the screen edge allows.
+// size, so they never cover it; the joystick touches the left edge of the screen (of its safe area).
 using System.Collections.Generic;
 using Platypus.Core;
 using UnityEngine;
@@ -23,6 +23,7 @@ namespace PlatypusAndroid
     {
         const float BaseSize = 0.36f;     // ring diameter at 100%, fraction of the screen height
         const float KnobScale = 0.475f;   // knob diameter / ring diameter
+        const float RingPad = 14f / 640f; // transparent margin left of the ring in its picture (fraction of the width)
         const float FireSize = 0.26f;     // fire button diameter at 100%
         const float PauseSize = 0.11f;    // pause button diameter at 100%
         const float PressScale = 0.92f;   // a held control shrinks a little ...
@@ -116,8 +117,7 @@ namespace PlatypusAndroid
             TrackLives();
             float hud = Mathf.Max(livesKnown ? livesTop : 0f, livesArea);   // the lives strip, or what is drawn above it
             if (hud > 0f) line = Mathf.Max(line, hud + unit * 0.025f);
-            baseCenter = new Vector2(left + m + baseR, line + baseR);
-            if (livesKnown || livesArea > 0f) baseCenter.x = Mathf.Max(livesKnown ? livesX : 0f, left + m * 0.4f + baseR);
+            baseCenter = new Vector2(left + baseR * (1f - 2f * RingPad), line + baseR);   // against the left edge, no gap
             fireCenter = new Vector2(right - m - fireR, line + fireR);
 
             pauseCenter = new Vector2(right - m * 0.6f - pauseR, top - m * 0.6f - pauseR);   // top-right corner

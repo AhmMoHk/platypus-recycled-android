@@ -67,7 +67,7 @@ What the port changes
     The Reclayed music selector stays open with add-ons on. Hall of Fame: a tap anywhere but the page arrows goes
     back at once.
   - Clay touch controls, only while playing (hidden in menus, options, pause, level select), see-through:
-      Overrides\Assets\PlatypusAndroid\Resources\1000045163.png  joystick ring, bottom-left, right above player 1's lives
+      Overrides\Assets\PlatypusAndroid\Resources\1000045163.png  joystick ring, against the left edge, above player 1's lives
                                                                  (the fire button stands on the same line; neither
                                                                  covers the lives, whatever the size)
       Overrides\Assets\PlatypusAndroid\Resources\1000045164.png  joystick knob, 47.5% of the ring, 360 deg, springs back
